@@ -6,7 +6,6 @@ use App\Models\Invoice;
 use App\Models\Project;
 use App\Models\Team;
 use App\Models\Ticket;
-use App\Models\User;
 
 test('the dashboard shows the current project and open tickets', function () {
     $team = Team::factory()->create();
