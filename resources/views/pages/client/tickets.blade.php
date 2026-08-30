@@ -79,12 +79,16 @@ class extends Component {
     #[Computed]
     public function systems(): array
     {
+        // reorder() drops the relations' default "latest first" ordering: MySQL
+        // rejects an ORDER BY on a column that DISTINCT does not select.
         return $this->team->tickets()
             ->whereNotNull('system')
+            ->reorder()
             ->distinct()
             ->pluck('system')
-            ->merge($this->team->projects()->pluck('title'))
+            ->merge($this->team->projects()->reorder()->pluck('title'))
             ->unique()
+            ->sortBy(fn (string $system) => mb_strtolower($system))
             ->values()
             ->all();
     }
