@@ -237,3 +237,8 @@ select:focus[data-flux-control] {
     --animate-rsc-marquee: rsc-marquee 34s linear infinite;
     --animate-rsc-drift: rsc-drift 26s ease-in-out infinite;
 }
+
+/* Alpine hides these until it boots; without this they flash on first paint. */
+[x-cloak] {
+    display: none !important;
+}
