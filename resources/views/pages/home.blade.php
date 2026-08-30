@@ -97,9 +97,15 @@ class extends Component {
         ['#about', 'about'],
     ];
 
+    // Signed-in visitors get a way back into their portal instead of a login
+    // link, which would only bounce them off the guest middleware.
+    $portal = auth()->check()
+        ? ['url' => route(auth()->user()->portalRoute()), 'label' => auth()->user()->is_admin ? 'admin' : 'client_area']
+        : ['url' => route('login'), 'label' => 'client_login'];
+
     $mobileLinks = collect($navLinks)
         ->map(fn (array $link) => ['url' => $link[0], 'label' => $link[1]])
-        ->push(['url' => route('login'), 'label' => 'client_login'])
+        ->push($portal)
         ->all();
 @endphp
 
@@ -121,7 +127,7 @@ class extends Component {
                     <a href="{{ $href }}" class="text-muted no-underline transition-colors duration-200 hover:text-body">{{ $label }}</a>
                 @endforeach
 
-                <a href="{{ route('login') }}" class="text-muted no-underline transition-colors duration-200 hover:text-body">client_login</a>
+                <a href="{{ $portal['url'] }}" class="text-muted no-underline transition-colors duration-200 hover:text-body">{{ $portal['label'] }}</a>
 
                 <x-rsc.theme-toggle />
 
@@ -497,7 +503,7 @@ class extends Component {
                     @foreach ($navLinks as [$href, $label])
                         <a href="{{ $href }}" class="text-muted no-underline hover:text-body">{{ $label }}</a>
                     @endforeach
-                    <a href="{{ route('login') }}" class="text-muted no-underline hover:text-body">client_login</a>
+                    <a href="{{ $portal['url'] }}" class="text-muted no-underline hover:text-body">{{ $portal['label'] }}</a>
                 </div>
 
                 <div class="font-mono text-xs text-muted">© {{ now()->year }} RSC Media Ltd</div>

@@ -60,6 +60,14 @@ class User extends Authenticatable implements PasskeyUser
     }
 
     /**
+     * Get the route name of the portal this user lands in after signing in.
+     */
+    public function portalRoute(): string
+    {
+        return $this->is_admin ? 'admin.queue' : 'client.dashboard';
+    }
+
+    /**
      * Get the access level this user has inside the given team, defaulting to their current one.
      */
     public function accessFor(?Team $team = null): ClientAccess
