@@ -64,7 +64,7 @@ new class extends Component {
 
         session()->flash('team-invitation-accepted', true);
 
-        $this->redirectRoute('dashboard', navigate: true);
+        $this->redirectRoute('client.dashboard', navigate: true);
     }
 
     public function declineInvitation(string $code): void

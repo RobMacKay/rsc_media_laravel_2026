@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ClientAccess;
 use App\Enums\TeamRole;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,12 +14,14 @@ use Illuminate\Support\Carbon;
  * @property int $team_id
  * @property int $user_id
  * @property TeamRole $role
+ * @property ClientAccess $access
+ * @property string|null $job_title
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Team $team
  * @property-read User $user
  */
-#[Fillable(['team_id', 'user_id', 'role'])]
+#[Fillable(['team_id', 'user_id', 'role', 'access', 'job_title'])]
 class Membership extends Pivot
 {
     /**
@@ -64,6 +67,7 @@ class Membership extends Pivot
     {
         return [
             'role' => TeamRole::class,
+            'access' => ClientAccess::class,
         ];
     }
 }

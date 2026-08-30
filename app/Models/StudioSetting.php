@@ -1,0 +1,96 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
+
+/**
+ * The studio's own defaults — rates, VAT and bank details. There is exactly one row.
+ *
+ * @property int $id
+ * @property int $hour_rate
+ * @property int $day_rate
+ * @property float $day_length
+ * @property float $minimum_charge
+ * @property int $out_of_hours_uplift
+ * @property int $payment_terms_days
+ * @property float $late_fee_percent
+ * @property bool $vat_registered
+ * @property string|null $vat_number
+ * @property float $vat_rate
+ * @property string|null $account_name
+ * @property string|null $bank_name
+ * @property string|null $sort_code
+ * @property string|null $account_number
+ * @property string $reference_format
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ */
+#[Fillable([
+    'hour_rate', 'day_rate', 'day_length', 'minimum_charge', 'out_of_hours_uplift',
+    'payment_terms_days', 'late_fee_percent', 'vat_registered', 'vat_number', 'vat_rate',
+    'account_name', 'bank_name', 'sort_code', 'account_number', 'reference_format',
+])]
+class StudioSetting extends Model
+{
+    /**
+     * The model's default values, mirroring the column defaults so a freshly
+     * created row is usable without a round trip back to the database.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'hour_rate' => 65,
+        'day_rate' => 460,
+        'day_length' => 7.5,
+        'minimum_charge' => 0.5,
+        'out_of_hours_uplift' => 50,
+        'payment_terms_days' => 21,
+        'late_fee_percent' => 2,
+        'vat_registered' => true,
+        'vat_rate' => 20,
+        'reference_format' => 'RSC-{invoice}',
+    ];
+
+    /**
+     * Get the studio's settings row, creating it from the defaults if it is missing.
+     */
+    public static function current(): self
+    {
+        return static::query()->firstOrCreate([]);
+    }
+
+    /**
+     * Get the effective VAT rate, which is zero while the studio is not registered.
+     */
+    public function effectiveVatRate(): float
+    {
+        return $this->vat_registered ? $this->vat_rate : 0.0;
+    }
+
+    /**
+     * Get the day rate implied by the hourly rate and the length of a working day.
+     */
+    public function impliedDayRate(): float
+    {
+        return $this->hour_rate * $this->day_length;
+    }
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'day_length' => 'float',
+            'minimum_charge' => 'float',
+            'late_fee_percent' => 'float',
+            'vat_registered' => 'boolean',
+            'vat_rate' => 'float',
+        ];
+    }
+}

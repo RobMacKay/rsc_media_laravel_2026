@@ -40,7 +40,7 @@ new class extends Component {
         $user->switchTeam($team);
 
         if (! request()->header('Referer')) {
-            $this->redirectRoute('dashboard', ['current_team' => $team->slug], navigate: true);
+            $this->redirectRoute('client.dashboard', navigate: true);
 
             return;
         }

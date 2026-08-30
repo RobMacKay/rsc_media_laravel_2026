@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\ClientAccess;
 use App\Enums\TeamRole;
 use App\Models\Team;
 use App\Models\User;
@@ -50,10 +51,21 @@ class UserFactory extends Factory
 
             $team->members()->attach($user, [
                 'role' => TeamRole::Owner->value,
+                'access' => ClientAccess::Full->value,
             ]);
 
             $user->switchTeam($team);
         });
+    }
+
+    /**
+     * Indicate that the user is a studio administrator.
+     */
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_admin' => true,
+        ]);
     }
 
     /**

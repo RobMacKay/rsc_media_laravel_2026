@@ -1,14 +1,29 @@
 <?php
 
-use App\Http\Middleware\EnsureTeamMembership;
+use App\Http\Middleware\EnsureUserHasClientAccess;
+use App\Http\Middleware\EnsureUserIsStudioAdmin;
 use Illuminate\Support\Facades\Route;
 
-Route::view('/', 'welcome')->name('home');
+Route::livewire('/', 'pages::home')->name('home');
 
-Route::prefix('{current_team}')
-    ->middleware(['auth', 'verified', EnsureTeamMembership::class])
-    ->group(function () {
-        Route::view('dashboard', 'dashboard')->name('dashboard');
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::prefix('client')->name('client.')->group(function () {
+        Route::livewire('/', 'pages::client.dashboard')->name('dashboard');
+        Route::livewire('tickets', 'pages::client.tickets')->name('tickets');
+        Route::livewire('team', 'pages::client.team')->name('team');
+        Route::livewire('plan', 'pages::client.plan')->name('plan');
+
+        Route::livewire('invoices', 'pages::client.invoices')
+            ->middleware(EnsureUserHasClientAccess::class.':billing')
+            ->name('invoices');
     });
+
+    Route::prefix('admin')->name('admin.')->middleware(EnsureUserIsStudioAdmin::class)->group(function () {
+        Route::livewire('/', 'pages::admin.queue')->name('queue');
+        Route::livewire('jobs', 'pages::admin.jobs')->name('jobs');
+        Route::livewire('invoices', 'pages::admin.invoices')->name('invoices');
+        Route::livewire('settings', 'pages::admin.settings')->name('settings');
+    });
+});
 
 require __DIR__.'/settings.php';

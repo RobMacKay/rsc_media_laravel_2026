@@ -64,3 +64,176 @@ select:focus[data-flux-control] {
 /* \[:where(&)\]:size-4 {
     @apply size-4;
 } */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RSC Media design system — tokens taken from the Claude Design handoff.
+   Light is the default; `.dark` on <html> swaps the ramp (Flux's appearance
+   system toggles that class, so the theme buttons in the UI drive it).
+   ══════════════════════════════════════════════════════════════════════ */
+
+:root {
+    --rsc-ink: #eef4f2;
+    --rsc-panel: #fbfdfc;
+    --rsc-line: rgba(8, 34, 42, 0.15);
+    --rsc-text: #0a2029;
+    --rsc-muted: rgba(10, 32, 41, 0.62);
+    --rsc-on-accent: #f4fbf9;
+    --rsc-accent: #0d7d63;
+    --rsc-accent-soft: #0f7f9e;
+    --rsc-warm: #c2521f;
+    --rsc-glow: rgba(13, 125, 99, 0.18);
+    --rsc-logo: var(--rsc-accent);
+}
+
+.dark {
+    --rsc-ink: #04121a;
+    --rsc-panel: #081b24;
+    --rsc-line: rgba(122, 230, 205, 0.18);
+    --rsc-text: #e6f4f1;
+    --rsc-muted: rgba(230, 244, 241, 0.6);
+    --rsc-on-accent: #04121a;
+    --rsc-accent: #2fe6a8;
+    --rsc-accent-soft: #56d2ff;
+    --rsc-warm: #ff9a5c;
+    --rsc-glow: rgba(47, 230, 168, 0.22);
+    --rsc-logo: #ffffff;
+}
+
+@theme inline {
+    --font-display: 'Schibsted Grotesk', Helvetica, Arial, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+    --color-ink: var(--rsc-ink);
+    --color-panel: var(--rsc-panel);
+    --color-line: var(--rsc-line);
+    --color-body: var(--rsc-text);
+    --color-muted: var(--rsc-muted);
+    --color-accent-ink: var(--rsc-on-accent);
+    --color-brand: var(--rsc-accent);
+    --color-brand-soft: var(--rsc-accent-soft);
+    --color-warm: var(--rsc-warm);
+    --color-logo: var(--rsc-logo);
+}
+
+@layer base {
+    .rsc {
+        background: var(--rsc-ink);
+        color: var(--rsc-text);
+        font-family: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+    }
+
+    .rsc ::selection {
+        background: var(--rsc-accent);
+        color: var(--rsc-on-accent);
+    }
+
+    .rsc :focus-visible {
+        outline: 2px solid var(--rsc-accent);
+        outline-offset: 3px;
+    }
+
+    .rsc ::placeholder {
+        color: var(--rsc-muted);
+    }
+}
+
+@utility rsc-hatch {
+    background-image: repeating-linear-gradient(
+        58deg,
+        var(--rsc-line) 0 1px,
+        transparent 1px clamp(20px, 2.4vw, 34px)
+    );
+    mask-image: radial-gradient(122% 92% at 50% 0%, #000 18%, transparent 82%);
+}
+
+@utility rsc-tint {
+    background: color-mix(in srgb, var(--rsc-accent) 14%, transparent);
+}
+
+@utility rsc-tint-warm {
+    background: color-mix(in srgb, var(--rsc-warm) 14%, transparent);
+}
+
+@keyframes rsc-fade {
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes rsc-bar {
+    from {
+        transform: scaleX(0);
+    }
+    to {
+        transform: scaleX(1);
+    }
+}
+
+@keyframes rsc-rise {
+    from {
+        transform: translateY(110%);
+    }
+    to {
+        transform: translateY(0);
+    }
+}
+
+@keyframes rsc-draw {
+    from {
+        transform: scaleX(0);
+    }
+    to {
+        transform: scaleX(1);
+    }
+}
+
+@keyframes rsc-marquee {
+    from {
+        transform: translateX(0);
+    }
+    to {
+        transform: translateX(-50%);
+    }
+}
+
+@keyframes rsc-flow {
+    to {
+        stroke-dashoffset: -240;
+    }
+}
+
+@keyframes rsc-pulse {
+    0%,
+    100% {
+        opacity: 0.25;
+        r: 3;
+    }
+    50% {
+        opacity: 1;
+        r: 4.6;
+    }
+}
+
+@keyframes rsc-drift {
+    0% {
+        transform: translate(-4%, -3%) scale(1);
+    }
+    50% {
+        transform: translate(5%, 4%) scale(1.15);
+    }
+    100% {
+        transform: translate(-4%, -3%) scale(1);
+    }
+}
+
+@theme {
+    --animate-rsc-fade: rsc-fade 500ms both;
+    --animate-rsc-bar: rsc-bar 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    --animate-rsc-marquee: rsc-marquee 34s linear infinite;
+    --animate-rsc-drift: rsc-drift 26s ease-in-out infinite;
+}

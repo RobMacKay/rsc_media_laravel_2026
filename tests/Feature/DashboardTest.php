@@ -6,7 +6,7 @@ test('guests are redirected to the login page', function () {
     $user = User::factory()->create();
     $team = $user->currentTeam;
 
-    $response = $this->get(route('dashboard'));
+    $response = $this->get(route('client.dashboard'));
     $response->assertRedirect(route('login'));
 });
 
@@ -16,7 +16,7 @@ test('authenticated users can visit the dashboard', function () {
 
     $response = $this
         ->actingAs($user)
-        ->get(route('dashboard'));
+        ->get(route('client.dashboard'));
 
     $response->assertOk();
 });

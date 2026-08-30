@@ -25,7 +25,7 @@ trait HasTeams
     public function teams(): BelongsToMany
     {
         return $this->belongsToMany(Team::class, 'team_members', 'user_id', 'team_id')
-            ->withPivot(['role'])
+            ->withPivot(['role', 'access', 'job_title'])
             ->withTimestamps();
     }
 

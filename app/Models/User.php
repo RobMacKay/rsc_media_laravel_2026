@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Concerns\HasTeams;
+use App\Enums\ClientAccess;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -22,6 +23,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string $name
  * @property string $email
  * @property Carbon|null $email_verified_at
+ * @property bool $is_admin
  * @property string $password
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
@@ -35,7 +37,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property-read Collection<int, Membership> $teamMemberships
  * @property-read Collection<int, Team> $teams
  */
-#[Fillable(['name', 'email', 'password', 'current_team_id'])]
+#[Fillable(['name', 'email', 'password', 'current_team_id', 'is_admin'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements PasskeyUser
 {
@@ -51,9 +53,28 @@ class User extends Authenticatable implements PasskeyUser
     {
         return [
             'email_verified_at' => 'datetime',
+            'is_admin' => 'boolean',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Get the access level this user has inside the given team, defaulting to their current one.
+     */
+    public function accessFor(?Team $team = null): ClientAccess
+    {
+        $team ??= $this->currentTeam;
+
+        if (! $team) {
+            return ClientAccess::View;
+        }
+
+        $access = $this->teamMemberships()
+            ->where('team_id', $team->id)
+            ->value('access');
+
+        return $access instanceof ClientAccess ? $access : ClientAccess::View;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Actions\Teams;
 
+use App\Enums\ClientAccess;
 use App\Enums\TeamRole;
 use App\Models\Team;
 use App\Models\User;
@@ -20,9 +21,10 @@ class CreateTeam
                 'is_personal' => $isPersonal,
             ]);
 
-            $membership = $team->memberships()->create([
+            $team->memberships()->create([
                 'user_id' => $user->id,
                 'role' => TeamRole::Owner,
+                'access' => ClientAccess::Full,
             ]);
 
             $user->switchTeam($team);

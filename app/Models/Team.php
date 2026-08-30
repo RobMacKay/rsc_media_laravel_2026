@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -19,14 +20,30 @@ use Illuminate\Support\Carbon;
  * @property string $name
  * @property string $slug
  * @property bool $is_personal
+ * @property int|null $plan_id
+ * @property string|null $requested_plan
+ * @property string|null $billing_email
+ * @property string|null $purchase_order_ref
+ * @property int|null $hour_rate
+ * @property int|null $day_rate
+ * @property float|null $support_hours
+ * @property int|null $payment_terms_days
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
  * @property-read Collection<int, TeamInvitation> $invitations
  * @property-read Collection<int, Membership> $memberships
  * @property-read Collection<int, User> $members
+ * @property-read Plan|null $plan
+ * @property-read Collection<int, Project> $projects
+ * @property-read Collection<int, Ticket> $tickets
+ * @property-read Collection<int, Invoice> $invoices
+ * @property-read Collection<int, ProjectUpdate> $updates
  */
-#[Fillable(['name', 'slug', 'is_personal'])]
+#[Fillable([
+    'name', 'slug', 'is_personal', 'plan_id', 'requested_plan', 'billing_email',
+    'purchase_order_ref', 'hour_rate', 'day_rate', 'support_hours', 'payment_terms_days',
+])]
 class Team extends Model
 {
     /** @use HasFactory<TeamFactory> */
@@ -71,7 +88,7 @@ class Team extends Model
     {
         return $this->belongsToMany(User::class, 'team_members', 'team_id', 'user_id')
             ->using(Membership::class)
-            ->withPivot(['role'])
+            ->withPivot(['role', 'access', 'job_title'])
             ->withTimestamps();
     }
 
@@ -83,6 +100,92 @@ class Team extends Model
     public function memberships(): HasMany
     {
         return $this->hasMany(Membership::class);
+    }
+
+    /**
+     * Get the support plan this client is on, if any.
+     *
+     * @return BelongsTo<Plan, $this>
+     */
+    public function plan(): BelongsTo
+    {
+        return $this->belongsTo(Plan::class);
+    }
+
+    /**
+     * Get this client's projects, newest first.
+     *
+     * @return HasMany<Project, $this>
+     */
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class)->latest();
+    }
+
+    /**
+     * Get this client's tickets, newest first.
+     *
+     * @return HasMany<Ticket, $this>
+     */
+    public function tickets(): HasMany
+    {
+        return $this->hasMany(Ticket::class)->latest();
+    }
+
+    /**
+     * Get this client's invoices, newest first.
+     *
+     * @return HasMany<Invoice, $this>
+     */
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class)->latest('issued_on');
+    }
+
+    /**
+     * Get the updates posted to this client's portal, newest first.
+     *
+     * @return HasMany<ProjectUpdate, $this>
+     */
+    public function updates(): HasMany
+    {
+        return $this->hasMany(ProjectUpdate::class)->latest('published_at');
+    }
+
+    /**
+     * Get the hourly rate that applies to this client, falling back to the studio default.
+     */
+    public function effectiveHourRate(StudioSetting $settings): int
+    {
+        return $this->hour_rate ?? $settings->hour_rate;
+    }
+
+    /**
+     * Get the day rate that applies to this client, falling back to the studio default.
+     */
+    public function effectiveDayRate(StudioSetting $settings): int
+    {
+        return $this->day_rate ?? $settings->day_rate;
+    }
+
+    /**
+     * Get the payment terms that apply to this client, falling back to the studio default.
+     */
+    public function effectivePaymentTerms(StudioSetting $settings): int
+    {
+        return $this->payment_terms_days ?? $settings->payment_terms_days;
+    }
+
+    /**
+     * Get the monthly support-hour allowance, taken from the override or the plan.
+     */
+    public function monthlySupportHours(): float
+    {
+        if ($this->support_hours !== null) {
+            return (float) $this->support_hours;
+        }
+
+        return $this->plan_id === null ? 0.0 : (float) $this->plan->hours_per_month;
     }
 
     /**
@@ -104,6 +207,7 @@ class Team extends Model
     {
         return [
             'is_personal' => 'boolean',
+            'support_hours' => 'float',
         ];
     }
 
