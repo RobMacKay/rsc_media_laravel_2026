@@ -6,20 +6,6 @@ use App\Models\Invoice;
 use App\Models\Project;
 use App\Models\Team;
 use App\Models\Ticket;
-use App\Models\User;
-
-/**
- * Add a user to a client business at the given access level.
- */
-function memberOf(Team $team, ClientAccess $access, TeamRole $role = TeamRole::Member): User
-{
-    $user = User::factory()->create();
-
-    $team->members()->attach($user, ['role' => $role->value, 'access' => $access->value]);
-    $user->switchTeam($team);
-
-    return $user;
-}
 
 test('the dashboard shows the current project and open tickets', function () {
     $team = Team::factory()->create();

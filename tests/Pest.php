@@ -1,5 +1,9 @@
 <?php
 
+use App\Enums\ClientAccess;
+use App\Enums\TeamRole;
+use App\Models\Team;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -44,7 +48,15 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Add a user to a client business at the given access level.
+ */
+function memberOf(Team $team, ClientAccess $access, TeamRole $role = TeamRole::Member): User
 {
-    // ..
+    $user = User::factory()->create();
+
+    $team->members()->attach($user, ['role' => $role->value, 'access' => $access->value]);
+    $user->switchTeam($team);
+
+    return $user;
 }

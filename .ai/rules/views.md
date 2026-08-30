@@ -13,3 +13,12 @@ Build screens from `resources/views/components/rsc/*` (panel, pill, chip, button
 The theme toggle writes `$flux.appearance`, which owns the `.dark` class, so both systems stay in step.
 
 Percentage heights need a parent with a definite height — bars inside an auto-height flex column collapse to nothing.
+
+## Name Livewire components without the ⚡ prefix
+Livewire's single-file components support a `⚡` filename prefix as a visual marker, and the starter kit shipped every component that way. Do not add it back.
+
+Files with the emoji in the name did not update on the Forge deploy: a change to `⚡home.blade.php` kept serving the old markup after a deploy that successfully applied every ASCII-named file in the same commit, and clearing the compiled views did not help. Renaming it fixed it, so the rest were renamed to match.
+
+`Livewire\Finder` checks the plain `<name>.blade.php` path too and strips zap characters when resolving, so component names are unchanged — `pages::client.dashboard` still points at `resources/views/pages/client/dashboard.blade.php`.
+
+Watch for one thing when naming components under `resources/views/components/`: Blade anonymous components live there too, so a Livewire component called `foo` now also answers to `<x-foo>`. Nothing uses those tags today, but a future anonymous component must not reuse a Livewire component's name.

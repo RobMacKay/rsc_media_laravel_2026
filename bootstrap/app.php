@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\SetTeamUrlDefaults;
+use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -16,6 +17,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             SetTeamUrlDefaults::class,
         ]);
+
+        // Guests-only pages otherwise bounce a signed-in visitor to "/", which
+        // just lands them back on the marketing site. Send them to their portal.
+        RedirectIfAuthenticated::redirectUsing(
+            fn (Request $request) => route($request->user()->portalRoute()),
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

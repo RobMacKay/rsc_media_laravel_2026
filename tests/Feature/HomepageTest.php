@@ -1,7 +1,9 @@
 <?php
 
+use App\Enums\ClientAccess;
 use App\Models\Enquiry;
 use App\Models\Plan;
+use App\Models\Team;
 use App\Models\User;
 use App\Notifications\NewEnquiry;
 use Illuminate\Support\Facades\Notification;
@@ -61,4 +63,40 @@ test('an unknown topic is rejected', function () {
         ->set('message', 'Hello.')
         ->call('send')
         ->assertHasErrors('topic');
+});
+
+test('guests are offered a login link', function () {
+    $this->get(route('home'))
+        ->assertOk()
+        ->assertSee('client_login')
+        ->assertSee(route('login'));
+});
+
+test('a signed-in client is offered their client area instead', function () {
+    $user = memberOf(Team::factory()->create(), ClientAccess::Full);
+
+    $this->actingAs($user)
+        ->get(route('home'))
+        ->assertOk()
+        ->assertSee('client_area')
+        ->assertDontSee('client_login')
+        ->assertSee(route('client.dashboard'));
+});
+
+test('a signed-in admin is offered the admin portal instead', function () {
+    $this->actingAs(User::factory()->admin()->create())
+        ->get(route('home'))
+        ->assertOk()
+        ->assertDontSee('client_login')
+        ->assertSee(route('admin.queue'));
+});
+
+test('guest-only pages send a signed-in visitor to their own portal', function () {
+    $client = memberOf(Team::factory()->create(), ClientAccess::Full);
+    $admin = User::factory()->admin()->create();
+
+    foreach (['login', 'register', 'password.request'] as $route) {
+        $this->actingAs($client)->get(route($route))->assertRedirect(route('client.dashboard'));
+        $this->actingAs($admin)->get(route($route))->assertRedirect(route('admin.queue'));
+    }
 });
