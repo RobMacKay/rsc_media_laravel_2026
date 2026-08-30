@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Actions\Teams\CreateTeam;
 use App\Enums\BillingMode;
 use App\Enums\ClientAccess;
 use App\Enums\InvoiceStatus;
@@ -20,7 +21,6 @@ use App\Models\ProjectUpdate;
 use App\Models\Team;
 use App\Models\Ticket;
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 
@@ -30,7 +30,10 @@ use Illuminate\Support\Carbon;
  */
 class DemoClientSeeder extends Seeder
 {
-    use WithoutModelEvents;
+    /**
+     * The password every demo account is created with.
+     */
+    private const DEMO_PASSWORD = 'password';
 
     /**
      * Seed the demo studio, clients, projects, tickets and invoices.
@@ -40,10 +43,9 @@ class DemoClientSeeder extends Seeder
         $care = Plan::where('slug', 'plan_02')->firstOrFail();
         $essential = Plan::where('slug', 'plan_01')->firstOrFail();
 
-        $ross = User::factory()->admin()->create([
-            'name' => 'Ross Mackay',
-            'email' => 'ross@rscmedia.co.uk',
-        ]);
+        $ross = $this->person('Ross Mackay', 'ross@rscmedia.co.uk', isAdmin: true);
+
+        app(CreateTeam::class)->handle($ross, 'RSC Media', isPersonal: true);
 
         $braemar = $this->client('Braemar Joinery', $care, [
             'billing_email' => 'accounts@braemarjoinery.co.uk',
@@ -238,6 +240,23 @@ class DemoClientSeeder extends Seeder
     }
 
     /**
+     * Create a verified demo user with a known password.
+     */
+    private function person(string $name, string $email, bool $isAdmin = false): User
+    {
+        $user = User::create([
+            'name' => $name,
+            'email' => $email,
+            'password' => self::DEMO_PASSWORD,
+            'is_admin' => $isAdmin,
+        ]);
+
+        $user->forceFill(['email_verified_at' => now()])->save();
+
+        return $user;
+    }
+
+    /**
      * Create a client business with its people.
      *
      * @param  array<string, mixed>  $attributes
@@ -245,20 +264,14 @@ class DemoClientSeeder extends Seeder
      */
     private function client(string $name, Plan $plan, array $attributes, array $people): Team
     {
-        $team = Team::factory()->create([
+        $team = Team::create([
             'name' => $name,
             'plan_id' => $plan->id,
             ...$attributes,
         ]);
 
         foreach ($people as [$personName, $email, $jobTitle, $role, $access]) {
-            $user = User::create([
-                'name' => $personName,
-                'email' => $email,
-                'password' => 'password',
-            ]);
-
-            $user->forceFill(['email_verified_at' => now()])->save();
+            $user = $this->person($personName, $email);
 
             $team->members()->attach($user, [
                 'role' => $role->value,

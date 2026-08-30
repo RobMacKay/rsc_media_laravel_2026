@@ -96,6 +96,11 @@ class extends Component {
         ['#support', 'support'],
         ['#about', 'about'],
     ];
+
+    $mobileLinks = collect($navLinks)
+        ->map(fn (array $link) => ['url' => $link[0], 'label' => $link[1]])
+        ->push(['url' => route('login'), 'label' => 'client_login'])
+        ->all();
 @endphp
 
 <div>
@@ -111,7 +116,7 @@ class extends Component {
                 <x-rsc.logo class="h-6 w-auto" />
             </a>
 
-            <nav class="flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-xs tracking-[0.04em]">
+            <nav class="hidden flex-wrap items-center gap-x-6 gap-y-2 font-mono text-xs tracking-[0.04em] lg:flex">
                 @foreach ($navLinks as [$href, $label])
                     <a href="{{ $href }}" class="text-muted no-underline transition-colors duration-200 hover:text-body">{{ $label }}</a>
                 @endforeach
@@ -125,6 +130,18 @@ class extends Component {
                     {{ __('Start a conversation') }}
                 </a>
             </nav>
+
+            <x-rsc.mobile-nav :links="$mobileLinks">
+                <x-slot:footer>
+                    <a href="#contact"
+                       x-on:click="close()"
+                       class="inline-flex items-center justify-center rounded-full bg-brand px-4 py-3 text-[13px] font-semibold text-accent-ink no-underline">
+                        {{ __('Start a conversation') }}
+                    </a>
+
+                    <x-rsc.theme-toggle class="self-start" />
+                </x-slot:footer>
+            </x-rsc.mobile-nav>
         </header>
 
         <section id="top" class="px-[clamp(18px,5vw,64px)] pt-[clamp(48px,9vw,132px)]">

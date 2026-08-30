@@ -27,7 +27,7 @@
                     'border-color: color-mix(in srgb, var(--rsc-warm) 45%, transparent)' => $badgeTone === 'warm',
                 ])>{{ $badge }}</span>
 
-                <nav class="ms-auto flex gap-1.5 rounded-full border border-line p-1">
+                <nav class="ms-auto hidden gap-1.5 rounded-full border border-line p-1 lg:flex">
                     @foreach ($nav as $item)
                         <a href="{{ $item['url'] }}" wire:navigate @class([
                             'rounded-full px-4 py-[7px] font-mono text-xs transition-colors duration-200',
@@ -37,12 +37,24 @@
                     @endforeach
                 </nav>
 
-                <div class="flex items-center gap-3">
+                <div class="hidden items-center gap-3 lg:flex">
                     <x-rsc.theme-toggle />
 
                     @if (isset($identity))
                         <div class="flex items-center gap-2.5 border-s border-line ps-3">{{ $identity }}</div>
                     @endif
+                </div>
+
+                <div class="ms-auto lg:hidden">
+                    <x-rsc.mobile-nav :links="collect($nav)->map(fn (array $item) => [...$item, 'navigate' => true])->all()">
+                        <x-slot:footer>
+                            @if (isset($identity))
+                                <div class="flex items-center gap-2.5">{{ $identity }}</div>
+                            @endif
+
+                            <x-rsc.theme-toggle class="self-start" />
+                        </x-slot:footer>
+                    </x-rsc.mobile-nav>
                 </div>
             </header>
 
