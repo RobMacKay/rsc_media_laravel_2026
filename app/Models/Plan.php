@@ -38,6 +38,16 @@ class Plan extends Model
     use HasFactory;
 
     /**
+     * The model's default values. MySQL will not accept a DEFAULT on a JSON
+     * column, so the empty feature list is declared here instead.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'features' => '[]',
+    ];
+
+    /**
      * Get the client teams on this plan.
      *
      * @return HasMany<Team, $this>

@@ -19,7 +19,7 @@ return new class extends Migration
             $table->unsignedInteger('price')->default(0);
             $table->decimal('hours_per_month', 5, 2)->default(0);
             $table->string('response_time')->default('next working day');
-            $table->json('features')->default('[]');
+            $table->json('features');
             $table->boolean('is_live')->default(true);
             $table->boolean('is_featured')->default(false);
             $table->unsignedSmallInteger('sort_order')->default(0);
