@@ -2,6 +2,7 @@
 
 use App\Enums\ClientAccess;
 use App\Enums\TicketStatus;
+use App\Models\Project;
 use App\Models\Team;
 use App\Models\Ticket;
 use Livewire\Livewire;
@@ -83,4 +84,26 @@ test('the status filter narrows the list', function () {
         ->set('filter', 'resolved')
         ->assertSee('All done')
         ->assertDontSee('Still open');
+});
+
+test('the new ticket form lists the systems a ticket can be raised against', function () {
+    $team = Team::factory()->create();
+    $user = memberOf($team, ClientAccess::Tickets);
+
+    Project::factory()->for($team)->create(['title' => 'Quote and job tracker']);
+    Ticket::factory()->for($team)->create(['system' => 'braemarjoinery.co.uk']);
+    Ticket::factory()->for($team)->create(['system' => 'braemarjoinery.co.uk']);
+    Ticket::factory()->for($team)->create(['system' => null]);
+
+    $component = Livewire::actingAs($user)
+        ->test('pages::client.tickets')
+        ->set('formOpen', true);
+
+    // Deduplicated, with the nulls dropped, and readable in the dropdown.
+    expect($component->instance()->systems)->toBe([
+        'braemarjoinery.co.uk',
+        'Quote and job tracker',
+    ]);
+
+    $component->assertSee('braemarjoinery.co.uk')->assertSee('Quote and job tracker');
 });
