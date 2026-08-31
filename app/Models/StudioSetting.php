@@ -10,6 +10,12 @@ use Illuminate\Support\Carbon;
  * The studio's own defaults — rates, VAT and bank details. There is exactly one row.
  *
  * @property int $id
+ * @property string|null $company_name
+ * @property string|null $company_number
+ * @property string|null $address
+ * @property string|null $email
+ * @property string|null $phone
+ * @property string|null $website
  * @property int $hour_rate
  * @property int $day_rate
  * @property float $day_length
@@ -29,6 +35,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  */
 #[Fillable([
+    'company_name', 'company_number', 'address', 'email', 'phone', 'website',
     'hour_rate', 'day_rate', 'day_length', 'minimum_charge', 'out_of_hours_uplift',
     'payment_terms_days', 'late_fee_percent', 'vat_registered', 'vat_number', 'vat_rate',
     'account_name', 'bank_name', 'sort_code', 'account_number', 'reference_format',
@@ -42,6 +49,7 @@ class StudioSetting extends Model
      * @var array<string, mixed>
      */
     protected $attributes = [
+        'company_name' => 'RSC Media Ltd',
         'hour_rate' => 65,
         'day_rate' => 460,
         'day_length' => 7.5,
@@ -60,6 +68,20 @@ class StudioSetting extends Model
     public static function current(): self
     {
         return static::query()->firstOrCreate([]);
+    }
+
+    /**
+     * Get the studio's address as one line per entry, for the invoice header.
+     *
+     * @return array<int, string>
+     */
+    public function addressLines(): array
+    {
+        return collect(preg_split('/\R/', (string) $this->address) ?: [])
+            ->map(fn (string $line) => trim($line))
+            ->filter()
+            ->values()
+            ->all();
     }
 
     /**

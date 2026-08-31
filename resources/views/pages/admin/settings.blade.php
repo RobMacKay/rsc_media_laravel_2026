@@ -33,6 +33,7 @@ class extends Component {
         $settings = StudioSetting::current();
 
         $this->studio = $settings->only([
+            'company_name', 'company_number', 'address', 'email', 'phone', 'website',
             'hour_rate', 'day_rate', 'day_length', 'minimum_charge', 'out_of_hours_uplift',
             'payment_terms_days', 'late_fee_percent', 'vat_registered', 'vat_number', 'vat_rate',
             'account_name', 'bank_name', 'sort_code', 'account_number', 'reference_format',
@@ -131,6 +132,12 @@ class extends Component {
     protected function validationAttributes(): array
     {
         return [
+            'studio.company_name' => __('company name'),
+            'studio.company_number' => __('company number'),
+            'studio.address' => __('address'),
+            'studio.email' => __('email'),
+            'studio.phone' => __('phone'),
+            'studio.website' => __('website'),
             'studio.hour_rate' => __('hourly rate'),
             'studio.day_rate' => __('day rate'),
             'studio.day_length' => __('hours in a day'),
@@ -161,6 +168,12 @@ class extends Component {
     public function save(): void
     {
         $validated = $this->validate([
+            'studio.company_name' => ['required', 'string', 'max:255'],
+            'studio.company_number' => ['nullable', 'string', 'max:255'],
+            'studio.address' => ['nullable', 'string', 'max:1000'],
+            'studio.email' => ['nullable', 'email', 'max:255'],
+            'studio.phone' => ['nullable', 'string', 'max:255'],
+            'studio.website' => ['nullable', 'string', 'max:255'],
             'studio.hour_rate' => ['required', 'integer', 'min:0'],
             'studio.day_rate' => ['required', 'integer', 'min:0'],
             'studio.day_length' => ['required', 'numeric', 'min:1', 'max:12'],
@@ -225,6 +238,39 @@ class extends Component {
     </div>
 
     <form wire:submit="save" class="flex flex-col gap-[clamp(12px,1.4vw,18px)]">
+        <x-rsc.panel>
+            <div class="mb-5 flex flex-wrap items-center gap-3 font-mono text-[11px] tracking-[0.08em] text-muted">
+                <span>company_details</span>
+                <span class="ms-auto text-[13px] normal-case tracking-normal">{{ __('These head every invoice.') }}</span>
+            </div>
+
+            <div class="grid gap-[18px] [grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
+                <x-rsc.field label="company_name" name="studio.company_name">
+                    <x-rsc.input wire:model="studio.company_name" class="!py-3" />
+                </x-rsc.field>
+                <x-rsc.field label="company_number" name="studio.company_number">
+                    <x-rsc.input wire:model="studio.company_number" placeholder="SC512347" class="!py-3 font-mono" />
+                </x-rsc.field>
+                <x-rsc.field label="website" name="studio.website">
+                    <x-rsc.input wire:model="studio.website" placeholder="rscmedia.co.uk" class="!py-3" />
+                </x-rsc.field>
+            </div>
+
+            <div class="mt-[18px] grid gap-[18px] [grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
+                <x-rsc.field label="address" name="studio.address" hint="{{ __('one line each') }}">
+                    <x-rsc.textarea wire:model="studio.address" rows="4" class="!py-3 !text-sm">{{ $studio['address'] ?? '' }}</x-rsc.textarea>
+                </x-rsc.field>
+                <div class="flex flex-col gap-[18px]">
+                    <x-rsc.field label="email" name="studio.email">
+                        <x-rsc.input type="email" wire:model="studio.email" class="!py-3" />
+                    </x-rsc.field>
+                    <x-rsc.field label="phone" name="studio.phone">
+                        <x-rsc.input wire:model="studio.phone" class="!py-3" />
+                    </x-rsc.field>
+                </div>
+            </div>
+        </x-rsc.panel>
+
         <x-rsc.panel>
             <div class="mb-5 flex flex-wrap items-center gap-3 font-mono text-[11px] tracking-[0.08em] text-muted">
                 <span>default_rates</span>

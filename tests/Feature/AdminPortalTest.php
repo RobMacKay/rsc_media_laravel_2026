@@ -190,3 +190,33 @@ test('a malformed sort code is rejected', function () {
         ->call('save')
         ->assertHasErrors(['studio.sort_code']);
 });
+
+test('the studio can edit the company details that head an invoice', function () {
+    Plan::factory()->create();
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.settings')
+        ->set('studio.company_name', 'RSC Media Ltd')
+        ->set('studio.company_number', 'SC512347')
+        ->set('studio.address', "Unit 4, Bridgend Works\nDunkeld")
+        ->set('studio.email', 'info@rscmedia.co.uk')
+        ->set('studio.website', 'rscmedia.co.uk')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $settings = StudioSetting::current();
+
+    expect($settings->company_number)->toBe('SC512347')
+        ->and($settings->addressLines())->toBe(['Unit 4, Bridgend Works', 'Dunkeld']);
+});
+
+test('a company name is required and the contact email must be one', function () {
+    Plan::factory()->create();
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.settings')
+        ->set('studio.company_name', '')
+        ->set('studio.email', 'not-an-email')
+        ->call('save')
+        ->assertHasErrors(['studio.company_name', 'studio.email']);
+});

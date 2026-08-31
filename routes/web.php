@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\InvoiceDownloadController;
 use App\Http\Middleware\EnsureUserHasClientAccess;
 use App\Http\Middleware\EnsureUserIsStudioAdmin;
 use Illuminate\Support\Facades\Route;
@@ -14,9 +15,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('team', 'pages::client.team')->name('team');
         Route::livewire('plan', 'pages::client.plan')->name('plan');
 
-        Route::livewire('invoices', 'pages::client.invoices')
-            ->middleware(EnsureUserHasClientAccess::class.':billing')
-            ->name('invoices');
+        Route::middleware(EnsureUserHasClientAccess::class.':billing')->group(function () {
+            Route::livewire('invoices', 'pages::client.invoices')->name('invoices');
+            Route::livewire('invoices/{invoice:number}', 'pages::client.invoice')->name('invoices.show');
+            Route::get('invoices/{invoice:number}/pdf', InvoiceDownloadController::class)->name('invoices.pdf');
+        });
     });
 
     Route::prefix('admin')->name('admin.')->middleware(EnsureUserIsStudioAdmin::class)->group(function () {

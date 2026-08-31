@@ -147,7 +147,8 @@ class extends Component {
 
                 @forelse ($this->invoices as $invoice)
                     @php $settled = ! $invoice->status->isOutstanding(); @endphp
-                    <div class="grid grid-cols-[110px_1fr_130px_110px_120px_110px] items-center gap-x-4 gap-y-2 border-b border-line px-[22px] py-4">
+                    <a href="{{ route('client.invoices.show', $invoice) }}" wire:navigate wire:key="invoice-{{ $invoice->id }}"
+                       class="grid grid-cols-[110px_1fr_130px_110px_120px_110px] items-center gap-x-4 gap-y-2 border-b border-line px-[22px] py-4 text-body no-underline transition-colors hover:rsc-tint">
                         <span class="font-mono text-xs text-muted">{{ $invoice->number }}</span>
                         <span>
                             <span class="block font-display text-[15px] font-bold tracking-[-0.015em]">{{ $invoice->note }}</span>
@@ -159,7 +160,7 @@ class extends Component {
                         <span class="flex flex-col items-start gap-[7px]">
                             <x-rsc.pill :tone="$invoice->status->tone()">{{ str($invoice->status->label())->lower() }}</x-rsc.pill>
                         </span>
-                    </div>
+                    </a>
                 @empty
                     <div class="px-[22px] py-8 text-sm text-muted">{{ __('No invoices match that filter.') }}</div>
                 @endforelse
