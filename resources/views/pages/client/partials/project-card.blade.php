@@ -1,6 +1,4 @@
-@php
-    $complete = $project->completed_on !== null || $project->percent >= 100;
-@endphp
+@php $complete = $project->isComplete(); @endphp
 
 <section class="rounded-[20px] border border-line bg-panel p-[clamp(22px,2.4vw,30px)]" wire:key="project-{{ $project->id }}">
     <div class="flex flex-wrap items-start justify-between gap-x-5 gap-y-3">

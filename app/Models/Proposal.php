@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 /**
  * A piece of work bigger than a ticket: the client's request, the proposal the
@@ -159,20 +160,21 @@ class Proposal extends Model
     }
 
     /**
-     * Determine whether there is enough written down to send this out.
-     */
-    public function isReadyToSend(): bool
-    {
-        return $this->price > 0 && $this->scopeLines() !== [];
-    }
-
-    /**
      * Sign the proposal off: open the project it describes and raise the
      * deposit invoice, so the client's approval actually starts the work.
      */
     public function approve(StudioSetting $settings): Project
     {
         return DB::transaction(function () use ($settings) {
+            // Re-read under a lock: the caller checks the status, but two
+            // sign-offs racing would both pass that check and the second would
+            // collide on the unique project reference.
+            $locked = static::query()->whereKey($this->getKey())->lockForUpdate()->first();
+
+            if ($locked?->status !== ProposalStatus::Sent) {
+                throw new RuntimeException("Proposal {$this->reference} is not out for sign-off.");
+            }
+
             $project = Project::create([
                 'reference' => $this->reference,
                 'team_id' => $this->team_id,

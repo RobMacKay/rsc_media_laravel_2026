@@ -85,6 +85,14 @@ class Project extends Model
     }
 
     /**
+     * Determine whether the work is finished and live.
+     */
+    public function isComplete(): bool
+    {
+        return $this->completed_on !== null || $this->percent >= 100;
+    }
+
+    /**
      * Get the hours summary the admin jobs board shows under the progress bar.
      */
     public function hoursLabel(): string

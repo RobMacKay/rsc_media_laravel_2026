@@ -2,6 +2,7 @@
 
 use App\Enums\InvoiceStatus;
 use App\Models\Invoice;
+use App\Models\StudioSetting;
 use App\Models\Team;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -25,6 +26,16 @@ class extends Component {
     public function team(): Team
     {
         return Auth::user()->currentTeam;
+    }
+
+    /**
+     * Get the payment terms that actually apply to this client, rather than
+     * assuming the studio default.
+     */
+    #[Computed]
+    public function paymentTerms(): int
+    {
+        return $this->team->effectivePaymentTerms(StudioSetting::current());
     }
 
     /**
@@ -169,7 +180,7 @@ class extends Component {
         </div>
         <div class="rounded-[18px] border border-line bg-panel px-[22px] py-5">
             <div class="mb-2.5 font-mono text-[11px] text-muted">terms</div>
-            <div class="font-display text-base font-bold">{{ __(':days days from issue', ['days' => $this->team->payment_terms_days ?? 21]) }}</div>
+            <div class="font-display text-base font-bold">{{ __(':days days from issue', ['days' => $this->paymentTerms]) }}</div>
             <div class="mt-1.5 text-[13px] text-muted">{{ __('Plan invoices go out on the 1st of the month.') }}</div>
         </div>
         <div class="rounded-[18px] border border-line bg-panel px-[22px] py-5">

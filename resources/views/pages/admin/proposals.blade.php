@@ -186,6 +186,11 @@ class extends Component {
 
         abort_unless($proposal, 404);
 
+        // Pin the selection to what is being written. Sending changes the sort
+        // order, and without this `current` would fall back to whatever floats
+        // to the top next, leaving the draft pointed at somebody else's work.
+        $this->selectedReference = $proposal->reference;
+
         $validated = $this->validate([
             'scope' => ['nullable', 'string'],
             'phases' => ['nullable', 'string'],
@@ -206,6 +211,8 @@ class extends Component {
         ]);
 
         unset($this->proposals, $this->current, $this->totals, $this->waitingLabel);
+
+        $this->fillDraftFrom($this->current);
     }
 
     /**
