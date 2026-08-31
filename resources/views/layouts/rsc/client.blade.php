@@ -6,6 +6,7 @@
     $links = [
         ['label' => 'dashboard', 'route' => 'client.dashboard'],
         ['label' => 'tickets', 'route' => 'client.tickets'],
+        ['label' => 'projects', 'route' => 'client.projects'],
         ['label' => 'team', 'route' => 'client.team'],
         ['label' => 'plan', 'route' => 'client.plan'],
     ];

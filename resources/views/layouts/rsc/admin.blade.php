@@ -1,6 +1,7 @@
 @php
     $nav = collect([
         ['label' => 'queue', 'route' => 'admin.queue'],
+        ['label' => 'proposals', 'route' => 'admin.proposals'],
         ['label' => 'jobs', 'route' => 'admin.jobs'],
         ['label' => 'invoices', 'route' => 'admin.invoices'],
         ['label' => 'settings', 'route' => 'admin.settings'],
