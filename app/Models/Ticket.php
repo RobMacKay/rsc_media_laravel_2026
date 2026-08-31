@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\BillingMode;
+use App\Enums\QuoteResponse;
 use App\Enums\TicketPriority;
 use App\Enums\TicketStatus;
 use App\Enums\TicketType;
@@ -14,6 +15,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 
@@ -35,6 +37,8 @@ use Illuminate\Support\Carbon;
  * @property int|null $quoted_rate
  * @property BillingMode $billing_mode
  * @property Carbon|null $quote_sent_at
+ * @property QuoteResponse|null $quote_response
+ * @property Carbon|null $quote_responded_at
  * @property Carbon|null $resolved_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -42,11 +46,13 @@ use Illuminate\Support\Carbon;
  * @property-read Project|null $project
  * @property-read User|null $reporter
  * @property-read Collection<int, Attachment> $attachments
+ * @property-read Collection<int, TicketComment> $comments
  */
 #[Fillable([
     'reference', 'team_id', 'project_id', 'reported_by', 'title', 'description',
     'system', 'page_url', 'type', 'priority', 'status', 'target_on',
-    'quoted_hours', 'quoted_rate', 'billing_mode', 'quote_sent_at', 'resolved_at',
+    'quoted_hours', 'quoted_rate', 'billing_mode', 'quote_sent_at',
+    'quote_response', 'quote_responded_at', 'resolved_at',
 ])]
 class Ticket extends Model
 {
@@ -94,6 +100,16 @@ class Ticket extends Model
     }
 
     /**
+     * Get the conversation on this ticket, oldest first.
+     *
+     * @return HasMany<TicketComment, $this>
+     */
+    public function comments(): HasMany
+    {
+        return $this->hasMany(TicketComment::class)->oldest();
+    }
+
+    /**
      * Get the files attached to this ticket.
      *
      * @return MorphMany<Attachment, $this>
@@ -123,6 +139,16 @@ class Ticket extends Model
     }
 
     /**
+     * Determine whether a quote has been sent that the client has not answered yet.
+     */
+    public function hasQuoteAwaitingResponse(): bool
+    {
+        return $this->quote_sent_at !== null
+            && $this->quote_response === null
+            && $this->billing_mode === BillingMode::Chargeable;
+    }
+
+    /**
      * Get the "Updated 2 hours ago" style line the ticket lists show.
      */
     public function updatedLabel(): string
@@ -147,6 +173,8 @@ class Ticket extends Model
             'target_on' => 'date',
             'quoted_hours' => 'float',
             'quote_sent_at' => 'datetime',
+            'quote_response' => QuoteResponse::class,
+            'quote_responded_at' => 'datetime',
             'resolved_at' => 'datetime',
         ];
     }
