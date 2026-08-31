@@ -81,6 +81,18 @@ class extends Component {
     }
 
     /**
+     * Pick a budget bracket.
+     *
+     * Passed by index rather than by value: the labels carry a pound sign and
+     * an en dash, and Blade does not compile @js() inside a component's
+     * attribute, so the literal string ends up in the wire:click expression.
+     */
+    public function chooseBudget(int $index): void
+    {
+        $this->budget = Proposal::BUDGETS[$index] ?? $this->budget;
+    }
+
+    /**
      * Open or close the proposal form.
      */
     public function togglePropose(): void
@@ -203,8 +215,8 @@ class extends Component {
                     <div>
                         <span class="mb-2 block font-mono text-[11px] text-muted">rough_budget</span>
                         <div class="flex flex-wrap gap-2">
-                            @foreach (\App\Models\Proposal::BUDGETS as $option)
-                                <x-rsc.chip wire:click="$set('budget', @js($option))" :active="$budget === $option" class="!text-[13px] !font-sans">
+                            @foreach (\App\Models\Proposal::BUDGETS as $index => $option)
+                                <x-rsc.chip wire:click="chooseBudget({{ $index }})" :active="$budget === $option" class="!text-[13px] !font-sans">
                                     {{ $option }}
                                 </x-rsc.chip>
                             @endforeach

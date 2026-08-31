@@ -35,6 +35,28 @@ test('a client can propose a project', function () {
         ->and($proposal->reference)->toStartWith('PRJ-');
 });
 
+test('the budget chips select a bracket', function () {
+    $user = memberOf(Team::factory()->create(), ClientAccess::Tickets);
+
+    $component = Livewire::actingAs($user)
+        ->test('pages::client.projects')
+        ->set('proposeOpen', true)
+        ->assertSet('budget', 'No idea yet')
+        ->call('chooseBudget', 2)
+        ->assertSet('budget', '£3k–£7k');
+
+    // The chips must carry a callable expression, not an uncompiled directive.
+    $component->assertSee('wire:click="chooseBudget(2)"', escape: false)
+        ->assertDontSee('@js(');
+});
+
+test('an out of range budget chip leaves the choice alone', function () {
+    Livewire::actingAs(memberOf(Team::factory()->create(), ClientAccess::Tickets))
+        ->test('pages::client.projects')
+        ->call('chooseBudget', 99)
+        ->assertSet('budget', 'No idea yet');
+});
+
 test('a proposal needs a title, a brief and a budget we offer', function () {
     $user = memberOf(Team::factory()->create(), ClientAccess::Tickets);
 
