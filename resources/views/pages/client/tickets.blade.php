@@ -142,7 +142,7 @@ class extends Component {
     /**
      * Open a ticket in the detail panel.
      */
-    public function open(string $reference): void
+    public function openTicket(string $reference): void
     {
         $this->openReference = $reference;
         $this->reset('comment');
@@ -285,7 +285,7 @@ class extends Component {
         ->merge(collect(TicketStatus::cases())->map(fn ($status) => [$status->value, $status->clientLabel()]));
 @endphp
 
-<div wire:poll.15s>
+<div wire:poll.15s x-data="{ panelOpen: @js($this->selected !== null) }">
     <div class="mb-[clamp(22px,2.6vw,34px)] flex flex-wrap items-end justify-between gap-5">
         <div>
             <x-rsc.kicker class="mb-2.5">support</x-rsc.kicker>
@@ -388,7 +388,8 @@ class extends Component {
                 </div>
 
                 @forelse ($this->tickets as $ticket)
-                    <button type="button" wire:click="open('{{ $ticket->reference }}')" wire:key="row-{{ $ticket->id }}"
+                    <button type="button" wire:click="openTicket('{{ $ticket->reference }}')"
+                            x-on:click="panelOpen = true" wire:key="row-{{ $ticket->id }}"
                             class="grid w-full cursor-pointer grid-cols-[96px_1fr_150px_110px_130px] items-center gap-x-4 gap-y-2 border-b border-line px-[22px] py-[18px] text-left transition-colors hover:rsc-tint">
                         <span class="font-mono text-xs text-muted">{{ $ticket->reference }}</span>
                         <span>
@@ -415,8 +416,11 @@ class extends Component {
         </div>
     </div>
 
-    @if ($ticket = $this->selected)
-        <x-rsc.slide-over open="$wire.openReference !== null" close="$wire.closeTicket()" :heading="$ticket->title">
+    {{-- Rendered unconditionally so Alpine sets the teleport up on page load
+         rather than on a later morph; the contents are what is conditional. --}}
+    <x-rsc.slide-over open="panelOpen" close="panelOpen = false; $wire.closeTicket()"
+                      :heading="$this->selected?->title ?? __('Ticket')">
+        @if ($ticket = $this->selected)
             <div class="sticky top-0 z-1 flex items-start gap-4 border-b border-line bg-panel px-[clamp(20px,3vw,30px)] py-5">
                 <div class="min-w-0 flex-1">
                     <div class="mb-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[11px] text-muted">
@@ -427,7 +431,7 @@ class extends Component {
                     <h2 class="m-0 font-display text-[clamp(19px,2.2vw,26px)] font-bold tracking-[-0.025em]">{{ $ticket->title }}</h2>
                 </div>
 
-                <button type="button" wire:click="closeTicket" aria-label="{{ __('Close ticket') }}"
+                <button type="button" x-on:click="panelOpen = false; $wire.closeTicket()" aria-label="{{ __('Close ticket') }}"
                         class="grid size-9 flex-none cursor-pointer place-items-center rounded-full border border-line text-muted transition-colors hover:border-brand hover:text-brand">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" class="size-[18px]" aria-hidden="true">
                         <path d="M6 6l12 12M18 6L6 18" />
@@ -527,6 +531,6 @@ class extends Component {
                     </form>
                 @endif
             </div>
-        </x-rsc.slide-over>
-    @endif
+        @endif
+    </x-rsc.slide-over>
 </div>

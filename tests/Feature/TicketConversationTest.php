@@ -19,7 +19,7 @@ test('a client sees the conversation but never the internal notes', function () 
 
     Livewire::actingAs(memberOf($team, ClientAccess::Full))
         ->test('pages::client.tickets')
-        ->call('open', 'RSC-2001')
+        ->call('openTicket', 'RSC-2001')
         ->assertSee('Shared with the client')
         ->assertDontSee('Studio eyes only');
 });
@@ -31,7 +31,7 @@ test('a client can add a message to their ticket', function () {
 
     Livewire::actingAs($user)
         ->test('pages::client.tickets')
-        ->call('open', 'RSC-2002')
+        ->call('openTicket', 'RSC-2002')
         ->set('comment', 'Any progress on this?')
         ->call('addComment')
         ->assertHasNoErrors();
@@ -49,7 +49,7 @@ test('a view-only person cannot comment', function () {
 
     Livewire::actingAs(memberOf($team, ClientAccess::View))
         ->test('pages::client.tickets')
-        ->call('open', 'RSC-2003')
+        ->call('openTicket', 'RSC-2003')
         ->set('comment', 'Hello')
         ->call('addComment')
         ->assertForbidden();
@@ -62,7 +62,7 @@ test('a client cannot open another business\'s ticket', function () {
 
     $component = Livewire::actingAs(memberOf(Team::factory()->create(), ClientAccess::Full))
         ->test('pages::client.tickets')
-        ->call('open', 'RSC-2004');
+        ->call('openTicket', 'RSC-2004');
 
     expect($component->instance()->selected)->toBeNull();
 
@@ -84,7 +84,7 @@ test('approving a quote moves the ticket into progress and records who decided',
 
     Livewire::actingAs(memberOf($team, ClientAccess::Full))
         ->test('pages::client.tickets')
-        ->call('open', 'RSC-2005')
+        ->call('openTicket', 'RSC-2005')
         ->call('respondToQuote', 'approved');
 
     $ticket->refresh();
@@ -108,7 +108,7 @@ test('declining a quote reopens the ticket', function () {
 
     Livewire::actingAs(memberOf($team, ClientAccess::Full))
         ->test('pages::client.tickets')
-        ->call('open', 'RSC-2006')
+        ->call('openTicket', 'RSC-2006')
         ->call('respondToQuote', 'declined');
 
     $ticket->refresh();
@@ -129,7 +129,7 @@ test('only someone with billing access can answer a quote', function () {
 
     Livewire::actingAs(memberOf($team, ClientAccess::Tickets))
         ->test('pages::client.tickets')
-        ->call('open', 'RSC-2007')
+        ->call('openTicket', 'RSC-2007')
         ->call('respondToQuote', 'approved')
         ->assertForbidden();
 
@@ -150,7 +150,7 @@ test('a quote cannot be answered twice', function () {
 
     Livewire::actingAs(memberOf($team, ClientAccess::Full))
         ->test('pages::client.tickets')
-        ->call('open', 'RSC-2008')
+        ->call('openTicket', 'RSC-2008')
         ->call('respondToQuote', 'declined')
         ->assertStatus(404);
 
