@@ -8,6 +8,7 @@ use App\Enums\ClientAccess;
 use App\Enums\InvoiceStatus;
 use App\Enums\InvoiceType;
 use App\Enums\ProjectPhase;
+use App\Enums\ProposalStatus;
 use App\Enums\TeamRole;
 use App\Enums\TicketPriority;
 use App\Enums\TicketStatus;
@@ -18,6 +19,7 @@ use App\Models\Invoice;
 use App\Models\Plan;
 use App\Models\Project;
 use App\Models\ProjectUpdate;
+use App\Models\Proposal;
 use App\Models\Team;
 use App\Models\Ticket;
 use App\Models\TicketComment;
@@ -77,6 +79,7 @@ class DemoClientSeeder extends Seeder
         ]);
 
         $tracker = $this->project($braemar, [
+            'reference' => 'PRJ-004',
             'title' => 'Quote and job tracker',
             'summary' => 'Internal tool replacing the shared spreadsheet.',
             'phase' => ProjectPhase::Build,
@@ -90,6 +93,7 @@ class DemoClientSeeder extends Seeder
         ]);
 
         $carePlan = $this->project($braemar, [
+            'reference' => 'PRJ-005',
             'title' => 'Hosting and care plan',
             'summary' => 'Ongoing hosting, updates and support hours.',
             'phase' => ProjectPhase::Live,
@@ -102,6 +106,7 @@ class DemoClientSeeder extends Seeder
         ]);
 
         $booking = $this->project($glencoe, [
+            'reference' => 'PRJ-003',
             'title' => 'Booking system phase 2',
             'summary' => 'Deposits and confirmation emails.',
             'phase' => ProjectPhase::Scoping,
@@ -115,6 +120,7 @@ class DemoClientSeeder extends Seeder
         ]);
 
         $rebuild = $this->project($fettes, [
+            'reference' => 'PRJ-001',
             'title' => 'Site rebuild',
             'summary' => 'New marketing site and booking hand-off.',
             'phase' => ProjectPhase::Testing,
@@ -235,6 +241,22 @@ class DemoClientSeeder extends Seeder
             $this->file($vatTicket, $ross, 'internal-notes-tax-table.md', 'MD', 3_072, false),
         ]);
 
+        $this->project($braemar, [
+            'reference' => 'PRJ-002',
+            'title' => 'Braemar Joinery website',
+            'summary' => 'Main site, timber calculator and enquiry forms.',
+            'phase' => ProjectPhase::Live,
+            'percent' => 100,
+            'milestone' => 'Complete',
+            'due_on' => '2026-03-04',
+            'completed_on' => '2026-03-04',
+            'hours_used' => 52,
+            'hours_budgeted' => 52,
+            'value_label' => '£5,900 fixed',
+        ]);
+
+        $this->proposals($braemar, $kirsty, $alan, $glencoe, $morag);
+
         $this->conversation($vatTicket, [
             [$kirsty, 'Customer spotted it on a quote we sent this morning, so it is a bit urgent. Happy for you to just fix it.', false, '2026-08-12 08:44:00'],
             [$ross, 'Found it — the VAT rate is hard coded in the PDF template rather than read from settings. Fixing it properly so it follows the rate you set.', false, '2026-08-12 09:30:00'],
@@ -341,6 +363,77 @@ class DemoClientSeeder extends Seeder
             'created_at' => now(),
             'updated_at' => now(),
         ];
+    }
+
+    /**
+     * Seed the proposal pipeline: one waiting to be written up for each of two
+     * clients, and one already out with the client for sign-off.
+     */
+    private function proposals(Team $braemar, User $kirsty, User $alan, Team $glencoe, User $morag): void
+    {
+        Proposal::create([
+            'reference' => 'PRJ-007',
+            'team_id' => $braemar->id,
+            'requested_by' => $kirsty->id,
+            'title' => 'Trade counter stock pages',
+            'brief' => 'Trade customers keep phoning to ask what timber we have in. We want them to see live stock and their own pricing without ringing the counter.',
+            'goal' => 'Would save the counter about an hour a day and stop us quoting on stock we have already sold.',
+            'budget_guide' => '£3k–£7k',
+            'needed_by' => 'before the October rush',
+            'contact' => 'Kirsty Munro',
+            'scope' => implode("\n", [
+                'Stock list page reading live quantities from the job tracker',
+                'Trade pricing shown only to signed-in trade accounts',
+                'Search and filter by timber type, length and grade',
+                'Weekly export for the counter staff to print',
+                'Staff guide and one training session',
+            ]),
+            'phases' => implode("\n", [
+                'Scoping | 18 Aug | Field list agreed, sample data from the tracker.',
+                'Build | 1 Sep | Pages, pricing rules and trade sign-in.',
+                'Testing | 12 Sep | Counter staff try it for a week on real stock.',
+                'Live | 15 Sep | Switch on, training session, two weeks of snagging.',
+            ]),
+            'excluded' => 'Photography, and any changes to the counter till system.',
+            'price' => 3400,
+            'deposit_percent' => 40,
+            'weeks' => 5,
+            'status' => ProposalStatus::Sent,
+            'sent_at' => Carbon::parse('2026-08-11'),
+            'created_at' => Carbon::parse('2026-07-28'),
+        ]);
+
+        Proposal::create([
+            'reference' => 'PRJ-006',
+            'team_id' => $braemar->id,
+            'requested_by' => $alan->id,
+            'title' => 'Van fleet booking board',
+            'brief' => 'A shared board so the yard can see which vans are out and when they are back. At the moment it is a whiteboard nobody updates.',
+            'goal' => 'Stops two drivers turning up for the same van.',
+            'budget_guide' => '£1k–£3k',
+            'needed_by' => 'before the October rush',
+            'contact' => 'Alan Munro',
+            'deposit_percent' => 40,
+            'weeks' => 3,
+            'status' => ProposalStatus::Submitted,
+            'created_at' => Carbon::parse('2026-08-06'),
+        ]);
+
+        Proposal::create([
+            'reference' => 'PRJ-009',
+            'team_id' => $glencoe->id,
+            'requested_by' => $morag->id,
+            'title' => 'Gift voucher checkout',
+            'brief' => 'People ring up at Christmas wanting to buy a night as a present. We would like them to buy a voucher online and print it themselves.',
+            'goal' => 'Roughly forty vouchers a year done by hand at the moment.',
+            'budget_guide' => '£1k–£3k',
+            'needed_by' => 'live by November',
+            'contact' => 'Morag Bell',
+            'deposit_percent' => 30,
+            'weeks' => 4,
+            'status' => ProposalStatus::Submitted,
+            'created_at' => Carbon::parse('2026-08-11'),
+        ]);
     }
 
     /**

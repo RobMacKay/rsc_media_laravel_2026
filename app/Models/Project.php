@@ -10,11 +10,13 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
+ * @property string|null $reference
  * @property int $team_id
  * @property string $title
  * @property string|null $summary
@@ -22,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property int $percent
  * @property string|null $milestone
  * @property Carbon|null $due_on
+ * @property Carbon|null $completed_on
  * @property string|null $waiting_on_client
  * @property float $hours_used
  * @property float|null $hours_budgeted
@@ -33,8 +36,8 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Attachment> $attachments
  */
 #[Fillable([
-    'team_id', 'title', 'summary', 'phase', 'percent', 'milestone',
-    'due_on', 'waiting_on_client', 'hours_used', 'hours_budgeted', 'value_label',
+    'reference', 'team_id', 'title', 'summary', 'phase', 'percent', 'milestone',
+    'due_on', 'completed_on', 'waiting_on_client', 'hours_used', 'hours_budgeted', 'value_label',
 ])]
 class Project extends Model
 {
@@ -49,6 +52,16 @@ class Project extends Model
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
+    }
+
+    /**
+     * Get the proposal this project was signed off from, if it came from one.
+     *
+     * @return HasOne<Proposal, $this>
+     */
+    public function proposal(): HasOne
+    {
+        return $this->hasOne(Proposal::class);
     }
 
     /**
@@ -95,6 +108,7 @@ class Project extends Model
         return [
             'phase' => ProjectPhase::class,
             'due_on' => 'date',
+            'completed_on' => 'date',
             'hours_used' => 'float',
             'hours_budgeted' => 'float',
         ];

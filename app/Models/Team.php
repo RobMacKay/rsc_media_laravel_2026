@@ -36,6 +36,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, User> $members
  * @property-read Plan|null $plan
  * @property-read Collection<int, Project> $projects
+ * @property-read Collection<int, Proposal> $proposals
  * @property-read Collection<int, Ticket> $tickets
  * @property-read Collection<int, Invoice> $invoices
  * @property-read Collection<int, ProjectUpdate> $updates
@@ -120,6 +121,16 @@ class Team extends Model
     public function projects(): HasMany
     {
         return $this->hasMany(Project::class)->latest();
+    }
+
+    /**
+     * Get this client's proposals, newest first.
+     *
+     * @return HasMany<Proposal, $this>
+     */
+    public function proposals(): HasMany
+    {
+        return $this->hasMany(Proposal::class)->latest();
     }
 
     /**
