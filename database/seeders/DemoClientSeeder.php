@@ -20,6 +20,7 @@ use App\Models\Project;
 use App\Models\ProjectUpdate;
 use App\Models\Team;
 use App\Models\Ticket;
+use App\Models\TicketComment;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
@@ -184,7 +185,7 @@ class DemoClientSeeder extends Seeder
             'updated_at' => '2026-08-06 12:00:00',
         ]);
 
-        $this->ticket($glencoe, $booking, $morag, [
+        $quoteTicket = $this->ticket($glencoe, $booking, $morag, [
             'reference' => 'RSC-1045',
             'title' => 'Add a deposit field to the booking flow',
             'description' => 'We want to take 20% up front rather than the full amount. Needs to show on the confirmation email too.',
@@ -232,6 +233,18 @@ class DemoClientSeeder extends Seeder
             $this->file($vatTicket, $ross, 'quote-vat-fix-estimate.pdf', 'PDF', 86_016, true),
             $this->file($vatTicket, $kirsty, 'vat-rate-config.png', 'PNG', 421_888, true),
             $this->file($vatTicket, $ross, 'internal-notes-tax-table.md', 'MD', 3_072, false),
+        ]);
+
+        $this->conversation($vatTicket, [
+            [$kirsty, 'Customer spotted it on a quote we sent this morning, so it is a bit urgent. Happy for you to just fix it.', false, '2026-08-12 08:44:00'],
+            [$ross, 'Found it — the VAT rate is hard coded in the PDF template rather than read from settings. Fixing it properly so it follows the rate you set.', false, '2026-08-12 09:30:00'],
+            [$ross, 'Tax table needs migrating to the settings row before this can be closed off.', true, '2026-08-12 09:32:00'],
+            [$kirsty, 'Perfect, thanks Ross.', false, '2026-08-12 10:40:00'],
+        ]);
+
+        $this->conversation($quoteTicket, [
+            [$morag, 'We want to take 20% up front rather than the full amount. Needs to show on the confirmation email too.', false, '2026-08-08 11:16:00'],
+            [$ross, 'Six hours covers the deposit field, the confirmation email and testing it end to end. Quote is on the ticket for you to approve.', false, '2026-08-08 12:00:00'],
         ]);
 
         $this->updates($braemar, $tracker);
@@ -328,6 +341,25 @@ class DemoClientSeeder extends Seeder
             'created_at' => now(),
             'updated_at' => now(),
         ];
+    }
+
+    /**
+     * Put a few messages on a ticket so the thread is not empty in the demo.
+     *
+     * @param  array<int, array{0: User, 1: string, 2: bool, 3: string}>  $messages
+     */
+    private function conversation(Ticket $ticket, array $messages): void
+    {
+        foreach ($messages as [$author, $body, $internal, $at]) {
+            TicketComment::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $author->id,
+                'body' => $body,
+                'is_internal' => $internal,
+                'created_at' => Carbon::parse($at),
+                'updated_at' => Carbon::parse($at),
+            ]);
+        }
     }
 
     /**
