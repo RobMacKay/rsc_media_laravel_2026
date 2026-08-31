@@ -82,11 +82,40 @@ class Invoice extends Model
     }
 
     /**
+     * Get the VAT charged on this invoice.
+     */
+    public function vatAmount(): float
+    {
+        return $this->amount * $this->vat_rate / 100;
+    }
+
+    /**
      * Get the invoice total including VAT.
      */
     public function total(): float
     {
-        return $this->amount * (1 + $this->vat_rate / 100);
+        return $this->amount + $this->vatAmount();
+    }
+
+    /**
+     * Get the reference the client should quote when they pay, built from the
+     * format the studio set in its settings.
+     */
+    public function paymentReference(StudioSetting $settings): string
+    {
+        return str_replace(
+            '{invoice}',
+            str($this->number)->afterLast('-')->toString(),
+            $settings->reference_format,
+        );
+    }
+
+    /**
+     * Determine whether this invoice is past its due date and still unpaid.
+     */
+    public function isOverdue(): bool
+    {
+        return $this->status->isOutstanding() && $this->due_on->isPast();
     }
 
     /**

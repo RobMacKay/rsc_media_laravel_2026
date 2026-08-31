@@ -72,6 +72,12 @@ class PlanSeeder extends Seeder
         }
 
         StudioSetting::current()->update([
+            'company_name' => 'RSC Media Ltd',
+            'company_number' => 'SC512347',
+            'address' => "Unit 4, Bridgend Works\nPerth Road\nDunkeld\nPH8 0AA",
+            'email' => 'info@rscmedia.co.uk',
+            'phone' => '07522 375848',
+            'website' => 'rscmedia.co.uk',
             'hour_rate' => 65,
             'day_rate' => 460,
             'day_length' => 7.5,
