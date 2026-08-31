@@ -71,7 +71,7 @@
                     </div>
                     <div class="flex justify-between gap-3.5">
                         <span>{{ __('Payment terms') }}</span>
-                        <span class="text-body">{{ __(':days days from invoice', ['days' => $proposal->team->payment_terms_days ?? 21]) }}</span>
+                        <span class="text-body">{{ __(':days days from invoice', ['days' => $paymentTerms]) }}</span>
                     </div>
                 </div>
 

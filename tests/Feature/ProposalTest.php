@@ -261,3 +261,63 @@ test('phase rows survive a malformed line', function () {
         ['name' => 'Build', 'date' => '', 'note' => ''],
     ]);
 });
+
+test('sending keeps the panel on the proposal that was sent', function () {
+    $glencoe = Proposal::factory()->create([
+        'reference' => 'PRJ-020',
+        'title' => 'Gift voucher checkout',
+        'status' => ProposalStatus::Submitted,
+        'created_at' => now(),
+    ]);
+
+    $braemar = Proposal::factory()->create([
+        'reference' => 'PRJ-021',
+        'title' => 'Van fleet booking board',
+        'status' => ProposalStatus::Submitted,
+        'created_at' => now()->subDay(),
+    ]);
+
+    $component = Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.proposals');
+
+    // No row clicked, so the panel falls back to whatever sorts first.
+    expect($component->instance()->current->reference)->toBe('PRJ-020');
+
+    $component->set('scope', 'Voucher page')->set('price', 2200)->call('send')->assertHasNoErrors();
+
+    // Sending re-sorts the list; the panel must not drift onto the other one.
+    expect($component->instance()->current->reference)->toBe('PRJ-020');
+
+    $component->set('weeks', 6)->call('saveDraft')->assertHasNoErrors();
+
+    expect($glencoe->fresh()->price)->toBe(2200)
+        ->and($glencoe->fresh()->weeks)->toBe(6)
+        ->and($braemar->fresh()->price)->toBe(0)
+        ->and($braemar->fresh()->scope)->toBeNull();
+});
+
+test('the sign-off card quotes the terms the invoice will actually use', function () {
+    StudioSetting::current()->update(['payment_terms_days' => 30]);
+
+    $team = Team::factory()->create(['payment_terms_days' => null]);
+    Proposal::factory()->for($team)->sent()->create(['title' => 'Trade counter stock pages']);
+
+    $this->actingAs(memberOf($team, ClientAccess::Full))
+        ->get(route('client.projects'))
+        ->assertOk()
+        ->assertSee('30 days from invoice')
+        ->assertDontSee('21 days from invoice');
+});
+
+test('a proposal cannot be signed off twice', function () {
+    $team = Team::factory()->create();
+    $proposal = Proposal::factory()->for($team)->sent()->create(['reference' => 'PRJ-030']);
+
+    $proposal->approve(StudioSetting::current());
+
+    expect(fn () => $proposal->fresh()->approve(StudioSetting::current()))
+        ->toThrow(RuntimeException::class);
+
+    expect(Project::count())->toBe(1)
+        ->and(Invoice::count())->toBe(1);
+});

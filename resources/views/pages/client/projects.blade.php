@@ -66,11 +66,10 @@ class extends Component {
             ]);
 
         $projects = $this->team->projects()
-            ->with('proposal')
             ->get()
             ->map(fn (Project $project) => [
                 'kind' => 'project',
-                'rank' => ($project->completed_on !== null || $project->percent >= 100) ? 3 : 2,
+                'rank' => $project->isComplete() ? 3 : 2,
                 'sort' => $project->due_on ?? $project->created_at,
                 'model' => $project,
             ]);
@@ -78,6 +77,16 @@ class extends Component {
         return $proposals->concat($projects)
             ->sortBy([['rank', 'asc'], ['sort', 'desc']])
             ->values();
+    }
+
+    /**
+     * Get the payment terms that actually apply to this client, so the figure
+     * on a sign-off card matches the invoice it goes on to raise.
+     */
+    #[Computed]
+    public function paymentTerms(): int
+    {
+        return $this->team->effectivePaymentTerms(StudioSetting::current());
     }
 
     /**
@@ -246,7 +255,10 @@ class extends Component {
     <div class="flex flex-col gap-[clamp(12px,1.4vw,18px)]">
         @forelse ($this->items as $item)
             @if ($item['kind'] === 'proposal')
-                @include('pages.client.partials.proposal-card', ['proposal' => $item['model']])
+                @include('pages.client.partials.proposal-card', [
+                    'proposal' => $item['model'],
+                    'paymentTerms' => $this->paymentTerms,
+                ])
             @else
                 @include('pages.client.partials.project-card', ['project' => $item['model']])
             @endif
