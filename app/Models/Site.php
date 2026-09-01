@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\SiteStatus;
+use App\Support\Sites\SshResult;
 use Carbon\CarbonInterface;
 use Database\Factories\SiteFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -21,12 +22,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $url
  * @property string $host
  * @property bool $is_active
+ * @property bool $ssh_enabled
+ * @property int $ssh_port
  * @property SiteStatus $status
  * @property int|null $http_status
  * @property int|null $response_ms
  * @property bool|null $ssl_valid
  * @property CarbonInterface|null $ssl_expires_at
  * @property string|null $ssl_issuer
+ * @property bool|null $ssh_ok
+ * @property string|null $ssh_banner
+ * @property string|null $ssh_error
  * @property string|null $last_error
  * @property CarbonInterface|null $last_checked_at
  * @property CarbonInterface|null $last_up_at
@@ -39,8 +45,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read Collection<int, SiteCheck> $checks
  */
 #[Fillable([
-    'team_id', 'name', 'url', 'host', 'is_active', 'status', 'http_status',
-    'response_ms', 'ssl_valid', 'ssl_expires_at', 'ssl_issuer', 'last_error',
+    'team_id', 'name', 'url', 'host', 'is_active', 'ssh_enabled', 'ssh_port',
+    'status', 'http_status', 'response_ms', 'ssl_valid', 'ssl_expires_at',
+    'ssl_issuer', 'ssh_ok', 'ssh_banner', 'ssh_error', 'last_error',
     'last_checked_at', 'last_up_at', 'last_down_at', 'consecutive_failures',
     'down_notified_at',
 ])]
@@ -53,6 +60,23 @@ class Site extends Model
      * How close to expiry a certificate has to be before we say so.
      */
     public const SSL_WARNING_DAYS = 21;
+
+    /**
+     * The model's default values.
+     *
+     * The database has the same defaults, but a freshly created model does not
+     * read them back, so a site checked in the same request as it was made
+     * would otherwise have no port to knock on.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'is_active' => true,
+        'ssh_enabled' => false,
+        'ssh_port' => 22,
+        'status' => 'unknown',
+        'consecutive_failures' => 0,
+    ];
 
     /**
      * Get the client this site belongs to.
@@ -119,6 +143,36 @@ class Site extends Model
     }
 
     /**
+     * Get the line describing SSH, in plain words.
+     */
+    public function sshLabel(): string
+    {
+        if (! $this->ssh_enabled) {
+            return __('Not watched');
+        }
+
+        if ($this->ssh_ok === null) {
+            return __('Not checked yet');
+        }
+
+        if (! $this->ssh_ok) {
+            return __('Not answering');
+        }
+
+        return $this->sshServerVersion() ?? __('Answering');
+    }
+
+    /**
+     * Get the SSH server version out of the stored greeting.
+     */
+    public function sshServerVersion(): ?string
+    {
+        return $this->ssh_banner === null
+            ? null
+            : (new SshResult(reachable: true, banner: $this->ssh_banner))->serverVersion();
+    }
+
+    /**
      * Get the share of checks in the last month that found the site up.
      */
     public function uptimePercent(): ?float
@@ -143,6 +197,8 @@ class Site extends Model
     {
         return [
             'is_active' => 'boolean',
+            'ssh_enabled' => 'boolean',
+            'ssh_ok' => 'boolean',
             'status' => SiteStatus::class,
             'ssl_valid' => 'boolean',
             'ssl_expires_at' => 'datetime',

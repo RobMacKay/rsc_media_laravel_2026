@@ -21,12 +21,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $response_ms
  * @property bool|null $ssl_valid
  * @property CarbonInterface|null $ssl_expires_at
+ * @property bool|null $ssh_ok
+ * @property string|null $ssh_banner
  * @property string|null $error
  * @property-read Site $site
  */
 #[Fillable([
     'site_id', 'checked_at', 'status', 'http_status', 'response_ms',
-    'ssl_valid', 'ssl_expires_at', 'error',
+    'ssl_valid', 'ssl_expires_at', 'ssh_ok', 'ssh_banner', 'error',
 ])]
 class SiteCheck extends Model
 {
@@ -54,6 +56,7 @@ class SiteCheck extends Model
             'checked_at' => 'datetime',
             'status' => SiteStatus::class,
             'ssl_valid' => 'boolean',
+            'ssh_ok' => 'boolean',
             'ssl_expires_at' => 'datetime',
         ];
     }

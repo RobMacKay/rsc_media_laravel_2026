@@ -28,7 +28,7 @@ class SiteLogDownloadController extends Controller
                 return;
             }
 
-            fputcsv($handle, ['checked_at', 'status', 'http_status', 'response_ms', 'ssl_valid', 'ssl_expires_at', 'error']);
+            fputcsv($handle, ['checked_at', 'status', 'http_status', 'response_ms', 'ssl_valid', 'ssl_expires_at', 'ssh_ok', 'ssh_banner', 'error']);
 
             $site->checks()->reorder('checked_at')->chunk(500, function ($checks) use ($handle) {
                 foreach ($checks as $check) {
@@ -39,6 +39,8 @@ class SiteLogDownloadController extends Controller
                         $check->response_ms,
                         $check->ssl_valid === null ? '' : ($check->ssl_valid ? 'yes' : 'no'),
                         $check->ssl_expires_at?->toDateString(),
+                        $check->ssh_ok === null ? '' : ($check->ssh_ok ? 'yes' : 'no'),
+                        $check->ssh_banner,
                         $check->error,
                     ]);
                 }

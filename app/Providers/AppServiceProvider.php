@@ -5,6 +5,8 @@ namespace App\Providers;
 use App\Models\StudioSetting;
 use App\Support\Sites\CertificateInspector;
 use App\Support\Sites\OpenSslCertificateInspector;
+use App\Support\Sites\SocketSshProbe;
+use App\Support\Sites\SshProbe;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +29,7 @@ class AppServiceProvider extends ServiceProvider
         // Reading a certificate means opening a real TLS connection, so it sits
         // behind a contract that tests can swap for a fake.
         $this->app->bind(CertificateInspector::class, OpenSslCertificateInspector::class);
+        $this->app->bind(SshProbe::class, SocketSshProbe::class);
     }
 
     /**

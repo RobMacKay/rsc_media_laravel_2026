@@ -9,6 +9,8 @@ use App\Notifications\SiteIsBackUp;
 use App\Notifications\SiteIsDown;
 use App\Support\Sites\Certificate;
 use App\Support\Sites\CertificateInspector;
+use App\Support\Sites\SshProbe;
+use App\Support\Sites\SshResult;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Throwable;
@@ -26,7 +28,10 @@ class CheckSite
      */
     public const FAILURES_BEFORE_EMAIL = 2;
 
-    public function __construct(private CertificateInspector $certificates) {}
+    public function __construct(
+        private CertificateInspector $certificates,
+        private SshProbe $ssh,
+    ) {}
 
     /**
      * Check a site, write the result to its log, and email if it has gone down.
@@ -39,6 +44,10 @@ class CheckSite
             ? $this->certificates->inspect($site->host)
             : new Certificate(valid: false, error: __('The site is not served over https.'));
 
+        $ssh = $site->ssh_enabled
+            ? $this->ssh->probe($site->host, $site->ssh_port)
+            : null;
+
         $check = $site->checks()->create([
             'checked_at' => now(),
             'status' => $status,
@@ -46,10 +55,12 @@ class CheckSite
             'response_ms' => $responseMs,
             'ssl_valid' => $certificate->valid,
             'ssl_expires_at' => $certificate->expiresAt,
+            'ssh_ok' => $ssh?->reachable,
+            'ssh_banner' => $ssh?->banner,
             'error' => $error ?? $certificate->error,
         ]);
 
-        $this->record($site, $check, $certificate);
+        $this->record($site, $check, $certificate, $ssh);
 
         return $check;
     }
@@ -88,7 +99,7 @@ class CheckSite
     /**
      * Fold the check into the site's current state, and email on a change.
      */
-    private function record(Site $site, SiteCheck $check, Certificate $certificate): void
+    private function record(Site $site, SiteCheck $check, Certificate $certificate, ?SshResult $ssh): void
     {
         $isUp = $check->status === SiteStatus::Up;
 
@@ -99,6 +110,9 @@ class CheckSite
             'ssl_valid' => $certificate->valid,
             'ssl_expires_at' => $certificate->expiresAt,
             'ssl_issuer' => $certificate->issuer,
+            'ssh_ok' => $ssh?->reachable,
+            'ssh_banner' => $ssh?->banner,
+            'ssh_error' => $ssh?->error,
             'last_error' => $check->error,
             'last_checked_at' => $check->checked_at,
             'consecutive_failures' => $isUp ? 0 : $site->consecutive_failures + 1,

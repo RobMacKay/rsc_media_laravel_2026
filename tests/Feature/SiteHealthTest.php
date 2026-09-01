@@ -10,11 +10,14 @@ use App\Models\Team;
 use App\Notifications\SiteIsBackUp;
 use App\Notifications\SiteIsDown;
 use App\Support\Sites\CertificateInspector;
+use App\Support\Sites\SshProbe;
+use App\Support\Sites\SshResult;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 use Tests\Support\FakeCertificateInspector;
+use Tests\Support\FakeSshProbe;
 
 /**
  * Answer every outbound request with the given status.
@@ -32,8 +35,17 @@ function certificateExpires(int $inDays): void
     app()->instance(CertificateInspector::class, FakeCertificateInspector::expiring(now()->addDays($inDays)));
 }
 
+/**
+ * Swap the real SSH connection for a fixed answer.
+ */
+function sshAnswers(bool $reachable = true): void
+{
+    app()->instance(SshProbe::class, $reachable ? FakeSshProbe::answering() : FakeSshProbe::silent());
+}
+
 beforeEach(function () {
     certificateExpires(60);
+    sshAnswers();
 });
 
 test('a client can add a site to watch', function () {
@@ -353,4 +365,145 @@ test('a client only ever sees their own sites', function () {
         ->assertOk()
         ->assertSee('Our website')
         ->assertDontSee('Their website');
+});
+
+test('SSH is left alone unless the client asks for it', function () {
+    siteReplies(200);
+    app()->instance(SshProbe::class, FakeSshProbe::silent('should never be called'));
+
+    $site = Site::factory()->create(['ssh_enabled' => false]);
+
+    $check = app(CheckSite::class)->handle($site);
+
+    expect($check->ssh_ok)->toBeNull()
+        ->and($site->fresh()->ssh_ok)->toBeNull()
+        ->and($site->fresh()->sshLabel())->toBe('Not watched');
+});
+
+test('a working SSH port is reported with the server it is running', function () {
+    siteReplies(200);
+    sshAnswers();
+
+    $site = Site::factory()->create(['ssh_enabled' => true, 'ssh_port' => 22]);
+
+    $check = app(CheckSite::class)->handle($site);
+
+    $site->refresh();
+
+    expect($check->ssh_ok)->toBeTrue()
+        ->and($site->ssh_ok)->toBeTrue()
+        ->and($site->sshServerVersion())->toBe('OpenSSH_9.6p1')
+        ->and($site->sshLabel())->toBe('OpenSSH_9.6p1');
+});
+
+test('an SSH port that does not answer is reported, with why', function () {
+    siteReplies(200);
+    sshAnswers(reachable: false);
+
+    $site = Site::factory()->create(['ssh_enabled' => true]);
+
+    app(CheckSite::class)->handle($site);
+
+    $site->refresh();
+
+    expect($site->ssh_ok)->toBeFalse()
+        ->and($site->ssh_error)->toBe('Connection refused')
+        ->and($site->sshLabel())->toBe('Not answering');
+});
+
+test('SSH failing does not mark the website itself down', function () {
+    Notification::fake();
+    siteReplies(200);
+    sshAnswers(reachable: false);
+
+    $team = Team::factory()->create();
+    memberOf($team, ClientAccess::Full);
+    $site = Site::factory()->for($team)->create(['ssh_enabled' => true]);
+
+    app(CheckSite::class)->handle($site);
+    app(CheckSite::class)->handle($site);
+
+    // The website is answering, so nothing is "down" and nobody is emailed
+    // about it. SSH state is reported on the page and in the log.
+    expect($site->fresh()->status)->toBe(SiteStatus::Up);
+
+    Notification::assertNothingSent();
+});
+
+test('a client can add a site with SSH watched from the start', function () {
+    $team = Team::factory()->create();
+    $user = memberOf($team, ClientAccess::Full);
+
+    Livewire::actingAs($user)
+        ->test('pages::client.health')
+        ->set('name', 'Main website')
+        ->set('url', 'braemarjoinery.co.uk')
+        ->set('watchSsh', true)
+        ->set('sshPort', 2222)
+        ->call('addSite')
+        ->assertHasNoErrors();
+
+    $site = $team->sites()->sole();
+
+    expect($site->ssh_enabled)->toBeTrue()
+        ->and($site->ssh_port)->toBe(2222);
+});
+
+test('a nonsense SSH port is refused', function () {
+    $team = Team::factory()->create();
+    $user = memberOf($team, ClientAccess::Full);
+
+    Livewire::actingAs($user)
+        ->test('pages::client.health')
+        ->set('name', 'Main website')
+        ->set('url', 'braemarjoinery.co.uk')
+        ->set('watchSsh', true)
+        ->set('sshPort', 70000)
+        ->call('addSite')
+        ->assertHasErrors('sshPort');
+
+    expect($team->sites()->count())->toBe(0);
+});
+
+test('SSH watching can be turned on and off afterwards', function () {
+    $team = Team::factory()->create();
+    $user = memberOf($team, ClientAccess::Full);
+    $site = Site::factory()->for($team)->create(['ssh_enabled' => false]);
+
+    Livewire::actingAs($user)
+        ->test('pages::client.health')
+        ->call('toggleSsh', $site->id);
+
+    expect($site->fresh()->ssh_enabled)->toBeTrue();
+
+    Livewire::actingAs($user)
+        ->test('pages::client.health')
+        ->call('toggleSsh', $site->id);
+
+    expect($site->fresh()->ssh_enabled)->toBeFalse();
+});
+
+test('the log carries the SSH columns', function () {
+    $team = Team::factory()->create();
+    $user = memberOf($team, ClientAccess::Full);
+    $site = Site::factory()->for($team)->create(['ssh_enabled' => true]);
+
+    SiteCheck::factory()->for($site)->create([
+        'checked_at' => now(),
+        'ssh_ok' => true,
+        'ssh_banner' => 'SSH-2.0-OpenSSH_9.6p1',
+    ]);
+
+    $csv = $this->actingAs($user)->get(route('client.health.log', $site))->streamedContent();
+
+    expect($csv)->toContain('ssh_ok,ssh_banner')
+        ->and($csv)->toContain('yes,SSH-2.0-OpenSSH_9.6p1');
+});
+
+test('the SSH banner is read for the server version, and shrugged off when odd', function () {
+    $probe = new SshResult(reachable: true, banner: 'SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13');
+
+    expect($probe->serverVersion())->toBe('OpenSSH_9.6p1')
+        ->and((new SshResult(reachable: true, banner: 'nonsense'))->serverVersion())->toBeNull()
+        ->and((new SshResult(reachable: false))->serverVersion())->toBeNull();
 });
