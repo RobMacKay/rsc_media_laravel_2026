@@ -1,12 +1,16 @@
 <?php
 
+use App\Actions\Billing\RaiseInvoice;
+use App\Enums\BillingMode;
 use App\Enums\InvoiceStatus;
 use App\Enums\InvoiceType;
+use App\Enums\QuoteResponse;
 use App\Models\Invoice;
 use App\Models\Plan;
 use App\Models\Project;
 use App\Models\StudioSetting;
 use App\Models\Team;
+use App\Models\Ticket;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
 use Carbon\CarbonInterface;
@@ -227,6 +231,98 @@ class extends Component {
     }
 
     /**
+     * Get the projects with an agreed price that is not fully invoiced.
+     *
+     * @return Collection<int, Project>
+     */
+    #[Computed]
+    public function projectsToBill(): Collection
+    {
+        return Project::query()
+            ->with('team')
+            ->whereNotNull('agreed_value')
+            ->get()
+            ->filter(fn (Project $project) => $project->balanceToInvoice() > 0)
+            ->sortByDesc(fn (Project $project) => $project->percent)
+            ->values();
+    }
+
+    /**
+     * Get the chargeable tickets the client approved that have not been billed.
+     *
+     * @return Collection<int, Ticket>
+     */
+    #[Computed]
+    public function ticketsToBill(): Collection
+    {
+        return Ticket::query()
+            ->with(['team', 'project', 'invoice'])
+            ->where('billing_mode', BillingMode::Chargeable)
+            ->where('quote_response', QuoteResponse::Approved)
+            ->get()
+            ->filter(fn (Ticket $ticket) => $ticket->isReadyToInvoice())
+            ->values();
+    }
+
+    /**
+     * Raise the balance owed on a project.
+     */
+    public function raiseFinal(int $projectId): void
+    {
+        $project = Project::findOrFail($projectId);
+
+        abort_if($project->balanceToInvoice() <= 0, 422);
+
+        $invoice = $this->raiser()->final($project);
+
+        $this->refreshBilling();
+
+        Flux::toast(variant: 'success', text: __('Raised :number for :amount.', [
+            'number' => $invoice->number,
+            'amount' => '£'.number_format($invoice->amount),
+        ]));
+    }
+
+    /**
+     * Raise the invoice for an approved chargeable ticket.
+     */
+    public function raiseForTicket(int $ticketId): void
+    {
+        $ticket = Ticket::findOrFail($ticketId);
+
+        abort_unless($ticket->isReadyToInvoice(), 422);
+
+        $invoice = $this->raiser()->forTicket($ticket);
+
+        $this->refreshBilling();
+
+        Flux::toast(variant: 'success', text: __('Raised :number for :amount.', [
+            'number' => $invoice->number,
+            'amount' => '£'.number_format($invoice->amount),
+        ]));
+    }
+
+    /**
+     * Get the action that creates invoices, so numbering, VAT and terms are
+     * worked out the same way wherever an invoice comes from.
+     */
+    private function raiser(): RaiseInvoice
+    {
+        return new RaiseInvoice($this->settings);
+    }
+
+    /**
+     * Drop the cached billing figures after raising something.
+     */
+    private function refreshBilling(): void
+    {
+        unset(
+            $this->allInvoices, $this->invoices, $this->money,
+            $this->collected, $this->months, $this->projectsToBill, $this->ticketsToBill,
+        );
+    }
+
+    /**
      * Mark an invoice as settled.
      */
     public function markPaid(int $invoiceId): void
@@ -236,7 +332,7 @@ class extends Component {
             'paid_at' => now(),
         ]);
 
-        unset($this->allInvoices, $this->invoices, $this->money, $this->collected, $this->months);
+        $this->refreshBilling();
 
         Flux::toast(variant: 'success', text: __('Marked as paid.'));
     }
@@ -255,25 +351,19 @@ class extends Component {
         ]);
 
         $team = Team::findOrFail($validated['teamId']);
-        $settings = $this->settings;
 
-        $invoice = Invoice::create([
-            'number' => Invoice::nextNumber(),
-            'team_id' => $team->id,
-            'project_id' => $validated['projectId'],
-            'type' => $validated['type'],
-            'note' => $validated['note'],
-            'amount' => $validated['amount'],
-            'vat_rate' => $settings->effectiveVatRate(),
-            'issued_on' => now(),
-            'due_on' => now()->addDays($team->effectivePaymentTerms($settings)),
-            'status' => InvoiceStatus::Sent,
-        ]);
+        $invoice = $this->raiser()->handle(
+            team: $team,
+            type: InvoiceType::from($validated['type']),
+            note: $validated['note'],
+            amount: $validated['amount'],
+            project: $validated['projectId'] ? Project::find($validated['projectId']) : null,
+        );
 
         $this->reset('note');
         $this->raisedNumber = $invoice->number;
 
-        unset($this->allInvoices, $this->invoices, $this->money, $this->collected, $this->months);
+        $this->refreshBilling();
 
         Flux::toast(variant: 'success', text: __('Invoice :number raised.', ['number' => $invoice->number]));
     }
@@ -357,6 +447,81 @@ class extends Component {
             </div>
         </x-rsc.panel>
     </div>
+
+    @if ($this->projectsToBill->isNotEmpty() || $this->ticketsToBill->isNotEmpty())
+        <x-rsc.panel class="mb-[clamp(12px,1.4vw,18px)]">
+            <div class="mb-4 flex flex-wrap items-center gap-3 font-mono text-[11px] tracking-[0.08em] text-muted">
+                <span>ready_to_invoice</span>
+                <span class="ms-auto text-[13px] normal-case tracking-normal">
+                    {{ __('Work that is agreed and not yet billed.') }}
+                </span>
+            </div>
+
+            <div class="flex flex-col">
+                @foreach ($this->projectsToBill as $project)
+                    <div class="grid grid-cols-[1fr_auto] items-center gap-x-5 gap-y-2 border-t border-line py-3.5"
+                         wire:key="bill-project-{{ $project->id }}">
+                        <div class="min-w-0">
+                            <div class="mb-1 font-mono text-[11px] text-muted">
+                                {{ $project->reference ?? 'project' }} · {{ $project->team->name }} ·
+                                {{ __(':percent% complete', ['percent' => $project->percent]) }}
+                            </div>
+                            <div class="font-display text-base font-bold tracking-[-0.015em]">{{ $project->title }}</div>
+                            <div class="mt-1 text-[13px] text-muted">
+                                {{ __('Agreed :agreed, invoiced :invoiced', [
+                                    'agreed' => $money($project->agreed_value),
+                                    'invoiced' => $money($project->contractInvoiced()),
+                                ]) }}
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center justify-end gap-3">
+                            <div class="text-end">
+                                <div class="font-display text-[19px] font-bold tracking-[-0.02em]">{{ $money($project->balanceToInvoice()) }}</div>
+                                <div class="font-mono text-[10px] text-muted">{{ __('balance') }}</div>
+                            </div>
+                            <x-rsc.button wire:click="raiseFinal({{ $project->id }})"
+                                          wire:confirm="{{ __('Raise the final invoice for :title?', ['title' => $project->title]) }}"
+                                          class="!px-5 !py-2.5 !text-sm">
+                                {{ __('Raise final') }}
+                            </x-rsc.button>
+                        </div>
+                    </div>
+                @endforeach
+
+                @foreach ($this->ticketsToBill as $ticket)
+                    <div class="grid grid-cols-[1fr_auto] items-center gap-x-5 gap-y-2 border-t border-line py-3.5"
+                         wire:key="bill-ticket-{{ $ticket->id }}">
+                        <div class="min-w-0">
+                            <div class="mb-1 font-mono text-[11px] text-muted">
+                                {{ $ticket->reference }} · {{ $ticket->team->name }} · {{ str($ticket->status->label())->lower() }}
+                            </div>
+                            <div class="font-display text-base font-bold tracking-[-0.015em]">{{ $ticket->title }}</div>
+                            <div class="mt-1 text-[13px] text-muted">
+                                {{ __(':hours hours at £:rate, approved :when', [
+                                    'hours' => rtrim(rtrim(number_format((float) $ticket->quoted_hours, 2), '0'), '.'),
+                                    'rate' => number_format((int) $ticket->quoted_rate),
+                                    'when' => $ticket->quote_responded_at?->format('j M') ?? '—',
+                                ]) }}
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center justify-end gap-3">
+                            <div class="text-end">
+                                <div class="font-display text-[19px] font-bold tracking-[-0.02em]">{{ $money($ticket->quoteTotal()) }}</div>
+                                <div class="font-mono text-[10px] text-muted">{{ __('quoted') }}</div>
+                            </div>
+                            <x-rsc.button wire:click="raiseForTicket({{ $ticket->id }})"
+                                          wire:confirm="{{ __('Raise the invoice for :reference?', ['reference' => $ticket->reference]) }}"
+                                          class="!px-5 !py-2.5 !text-sm">
+                                {{ __('Raise invoice') }}
+                            </x-rsc.button>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </x-rsc.panel>
+    @endif
 
     @if ($formOpen)
         <x-rsc.panel accent class="mb-[clamp(12px,1.4vw,18px)] animate-rsc-fade !p-[clamp(20px,2.6vw,32px)]">

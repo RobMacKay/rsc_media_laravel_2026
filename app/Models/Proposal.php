@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Enums\InvoiceStatus;
+use App\Actions\Billing\RaiseInvoice;
 use App\Enums\InvoiceType;
 use App\Enums\ProjectPhase;
 use App\Enums\ProposalStatus;
@@ -185,6 +185,7 @@ class Proposal extends Model
                 'milestone' => $this->phaseRows()[0]['name'] ?? 'Kick-off call',
                 'due_on' => now()->addWeeks(max($this->weeks, 1)),
                 'value_label' => '£'.number_format($this->price).' fixed',
+                'agreed_value' => $this->price,
             ]);
 
             $this->update([
@@ -193,18 +194,13 @@ class Proposal extends Model
                 'project_id' => $project->id,
             ]);
 
-            Invoice::create([
-                'number' => Invoice::nextNumber(),
-                'team_id' => $this->team_id,
-                'project_id' => $project->id,
-                'type' => InvoiceType::Deposit,
-                'note' => $this->title.' — '.$this->deposit_percent.'% deposit',
-                'amount' => (int) round($this->deposit()),
-                'vat_rate' => $settings->effectiveVatRate(),
-                'issued_on' => now(),
-                'due_on' => now()->addDays($this->team->effectivePaymentTerms($settings)),
-                'status' => InvoiceStatus::Sent,
-            ]);
+            (new RaiseInvoice($settings))->handle(
+                team: $this->team,
+                type: InvoiceType::Deposit,
+                note: $this->title.' — '.$this->deposit_percent.'% deposit',
+                amount: (int) round($this->deposit()),
+                project: $project,
+            );
 
             return $project;
         });
