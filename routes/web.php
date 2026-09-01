@@ -2,13 +2,16 @@
 
 use App\Http\Controllers\InvoiceDownloadController;
 use App\Http\Middleware\EnsureUserHasClientAccess;
+use App\Http\Middleware\EnsureUserHasOnboarded;
 use App\Http\Middleware\EnsureUserIsStudioAdmin;
 use Illuminate\Support\Facades\Route;
 
 Route::livewire('/', 'pages::home')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::prefix('client')->name('client.')->group(function () {
+    Route::livewire('welcome', 'pages::onboarding')->name('onboarding');
+
+    Route::prefix('client')->middleware(EnsureUserHasOnboarded::class)->name('client.')->group(function () {
         Route::livewire('/', 'pages::client.dashboard')->name('dashboard');
         Route::livewire('tickets', 'pages::client.tickets')->name('tickets');
         Route::livewire('projects', 'pages::client.projects')->name('projects');

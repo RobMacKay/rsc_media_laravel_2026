@@ -33,3 +33,14 @@ Never hardcode a currency symbol. Use `$team->money($amount)` for anything in a 
 Invoices snapshot `currency` from the client when raised (in RaiseInvoice), so moving a client to another currency never restates what has already been issued.
 
 There are no exchange rates in this app. A studio default rate used by a non-GBP client is charged as that many of the client's currency — the settings screen warns about this rather than converting. Anything added up across clients must go through `App\Support\Money::total()`, which prints "£4,200 + $1,800 USD" rather than pretending mixed currencies are one number.
+
+## New accounts go through the welcome wizard once
+`users.onboarded_at` gates the wizard at `pages::onboarding` (`/welcome`). `EnsureUserHasOnboarded` sits on the client route group and bounces anyone with a null value; studio admins are exempt, and the wizard's own route is outside the group so it cannot loop.
+
+Skipping sets `onboarded_at` too — the wizard promises everything is changeable from settings, so it must not nag. There is one setter, `finish()`.
+
+`UserFactory` creates an established account (`onboarded_at` set). Use `->brandNew()` to test the wizard, otherwise every client-area test 302s to it.
+
+Owners (`ClientAccess::Full`) get company → details → team; someone who joined on an invite gets only their own details, because their owner already did the other two. `steps()` is the single source for that, and `saveCompany()`/`invite()` re-check it with `abort_unless`.
+
+`teams.systems` is what the client says the studio looks after, and feeds the ticket form's system dropdown. `team_invitations.name` and `.access` are honoured by `CreateNewUser`, so the access chosen when inviting is what the person actually joins on.

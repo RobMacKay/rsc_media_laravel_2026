@@ -94,6 +94,7 @@ class extends Component {
             ->reorder()
             ->distinct()
             ->pluck('system')
+            ->merge($this->team->systems)
             ->merge($this->team->projects()->reorder()->pluck('title'))
             ->unique()
             ->sortBy(fn (string $system) => mb_strtolower($system))

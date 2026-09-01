@@ -113,7 +113,9 @@ class extends Component {
 
         $invitation = $this->team->invitations()->create([
             'email' => $validated['email'],
+            'name' => $validated['name'],
             'role' => TeamRole::Member,
+            'access' => $validated['access'],
             'invited_by' => Auth::id(),
             'expires_at' => now()->addDays(7),
         ]);
@@ -225,10 +227,13 @@ class extends Component {
             <div class="flex flex-col gap-4 rounded-[18px] border border-line bg-panel p-[clamp(20px,2.2vw,28px)]">
                 <div class="flex items-start gap-3.5">
                     <div class="grid size-[42px] flex-none place-items-center rounded-full font-display text-sm font-bold text-warm rsc-tint-warm">
-                        {{ str($invitation->email)->substr(0, 2)->upper() }}
+                        @php
+                            $invitee = $invitation->name ?? str($invitation->email)->before('@')->toString();
+                        @endphp
+                        {{ str($invitee)->squish()->explode(' ')->take(2)->map(fn (string $word) => mb_substr($word, 0, 1))->join('')->upper() }}
                     </div>
                     <div class="min-w-0 flex-1">
-                        <div class="font-display text-[17px] font-bold tracking-[-0.02em]">{{ str($invitation->email)->before('@') }}</div>
+                        <div class="font-display text-[17px] font-bold tracking-[-0.02em]">{{ $invitee }}</div>
                         <div class="mt-0.5 text-[13px] text-muted">{{ __('Invited :when', ['when' => $invitation->created_at->diffForHumans()]) }}</div>
                     </div>
                     <x-rsc.pill tone="warm" class="flex-none !text-[10px] !tracking-[0.08em]">pending</x-rsc.pill>
@@ -236,6 +241,9 @@ class extends Component {
                 <div class="text-[13px] break-words text-muted">{{ $invitation->email }}</div>
                 <div class="flex flex-wrap items-center gap-x-4 gap-y-2.5 border-t border-line pt-3.5 font-mono text-[11px]">
                     <span class="me-auto text-muted">{{ __('Expires :when', ['when' => $invitation->expires_at?->format('j M')]) }}</span>
+                    @if ($invitation->access)
+                        <span class="text-muted">{{ $invitation->access->label() }}</span>
+                    @endif
                 </div>
             </div>
         @endforeach

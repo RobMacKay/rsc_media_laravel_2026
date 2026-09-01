@@ -53,6 +53,10 @@ class DemoClientSeeder extends Seeder
 
         $braemar = $this->client('Braemar Joinery', $care, [
             'billing_email' => 'accounts@braemarjoinery.co.uk',
+            'company_number' => 'SC221084',
+            'address' => "Unit 4, Lochy Industrial Estate\nFort William\nPH33 6TQ",
+            'vat_number' => 'GB334512908',
+            'systems' => ['braemarjoinery.co.uk', 'Quote and job tracker', 'Trade counter stock pages'],
             'support_hours' => 6,
         ], [
             ['Kirsty Munro', 'kirsty@braemarjoinery.co.uk', 'Office manager', TeamRole::Owner, ClientAccess::Full],
@@ -311,7 +315,12 @@ class DemoClientSeeder extends Seeder
             'is_admin' => $isAdmin,
         ]);
 
-        $user->forceFill(['email_verified_at' => now()])->save();
+        // Demo accounts are established clients, not brand new sign-ups, so
+        // they skip the welcome wizard. Register a new account to see it.
+        $user->forceFill([
+            'email_verified_at' => now(),
+            'onboarded_at' => now()->subMonths(6),
+        ])->save();
 
         return $user;
     }

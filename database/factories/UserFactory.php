@@ -31,12 +31,25 @@ class UserFactory extends Factory
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
+            // An established account. Use ->brandNew() to test the welcome wizard.
+            'onboarded_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
             'two_factor_secret' => null,
             'two_factor_recovery_codes' => null,
             'two_factor_confirmed_at' => null,
         ];
+    }
+
+    /**
+     * Indicate that this account has just been created and has not been
+     * through the welcome wizard.
+     */
+    public function brandNew(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'onboarded_at' => null,
+        ]);
     }
 
     /**

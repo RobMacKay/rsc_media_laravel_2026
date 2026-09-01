@@ -20,6 +20,10 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property string $name
  * @property string $slug
+ * @property string|null $company_number
+ * @property string|null $address
+ * @property string|null $vat_number
+ * @property array<int, string> $systems
  * @property bool $is_personal
  * @property int|null $plan_id
  * @property string|null $requested_plan
@@ -45,6 +49,7 @@ use Illuminate\Support\Carbon;
  */
 #[Fillable([
     'name', 'slug', 'is_personal', 'plan_id', 'requested_plan', 'billing_email',
+    'company_number', 'address', 'vat_number', 'systems',
     'purchase_order_ref', 'currency', 'hour_rate', 'day_rate', 'support_hours',
     'payment_terms_days',
 ])]
@@ -61,6 +66,8 @@ class Team extends Model
      */
     protected $attributes = [
         'currency' => 'GBP',
+        // MySQL will not take a default on a JSON column.
+        'systems' => '[]',
     ];
 
     /**
@@ -240,6 +247,7 @@ class Team extends Model
         return [
             'is_personal' => 'boolean',
             'currency' => Currency::class,
+            'systems' => 'array',
             'support_hours' => 'float',
         ];
     }
