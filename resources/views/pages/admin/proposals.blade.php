@@ -329,7 +329,7 @@ class extends Component {
                     </x-rsc.field>
 
                     <div class="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(120px,1fr))]">
-                        <x-rsc.field label="price_ex_vat" name="price">
+                        <x-rsc.field label="{{ $this->settings->chargesVat() ? 'price_ex_vat' : 'price' }}" name="price">
                             <x-rsc.input type="number" min="0" step="50" wire:model.live.debounce.500ms="price" class="!py-[11px] !text-sm" />
                         </x-rsc.field>
                         <x-rsc.field label="deposit_%" name="depositPercent">
@@ -350,7 +350,7 @@ class extends Component {
                             <span class="text-body">{{ $money($this->totals['balance']) }}</span>
                         </div>
                         <div class="flex justify-between gap-3.5">
-                            <span>{{ __('Total inc VAT') }}</span>
+                            <span>{{ $this->settings->chargesVat() ? __('Total inc VAT') : __('Total') }}</span>
                             <span class="text-body">{{ $money($this->totals['total']) }}</span>
                         </div>
                         <div class="flex justify-between gap-3.5">

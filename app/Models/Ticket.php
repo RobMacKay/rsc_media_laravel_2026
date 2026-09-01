@@ -50,6 +50,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Attachment> $attachments
  * @property-read Invoice|null $invoice
  * @property-read Collection<int, TicketComment> $comments
+ * @property-read Collection<int, TicketRead> $reads
  */
 #[Fillable([
     'reference', 'team_id', 'project_id', 'reported_by', 'title', 'description',
@@ -133,6 +134,59 @@ class Ticket extends Model implements HasAttachments
     }
 
     /**
+     * Get when each person last opened this ticket.
+     *
+     * @return HasMany<TicketRead, $this>
+     */
+    public function reads(): HasMany
+    {
+        return $this->hasMany(TicketRead::class);
+    }
+
+    /**
+     * Note that this person has now seen the ticket as it stands.
+     */
+    public function markReadBy(User $user): void
+    {
+        $this->reads()->updateOrCreate(
+            ['user_id' => $user->id],
+            ['last_read_at' => now()],
+        );
+    }
+
+    /**
+     * Determine whether anything has moved on this ticket since this person
+     * last opened it.
+     *
+     * A ticket nobody has opened counts as an update: for the studio that is a
+     * new ticket, and for a client it is one raised by a colleague.
+     *
+     * Relies on `reads` being loaded for the one person we are asking about,
+     * which `scopeWithReadsFor` does, so a list does not query per row.
+     */
+    public function hasUpdateFor(User $user): bool
+    {
+        $read = $this->reads->firstWhere('user_id', $user->id);
+
+        if (! $read) {
+            return true;
+        }
+
+        return $this->updated_at?->greaterThan($read->last_read_at) ?? false;
+    }
+
+    /**
+     * Eager load just this person's read marks.
+     *
+     * @param  Builder<$this>  $query
+     */
+    #[Scope]
+    protected function withReadsFor(Builder $query, User $user): void
+    {
+        $query->with(['reads' => fn ($reads) => $reads->where('user_id', $user->id)]);
+    }
+
+    /**
      * Get the client business this record belongs to.
      */
     public function teamId(): int
@@ -167,6 +221,20 @@ class Ticket extends Model implements HasAttachments
         return $this->quote_sent_at !== null
             && $this->quote_response === null
             && $this->billing_mode === BillingMode::Chargeable;
+    }
+
+    /**
+     * Scope to tickets with a quote the client has not answered yet, matching
+     * hasQuoteAwaitingResponse() so a count and a row badge cannot disagree.
+     *
+     * @param  Builder<$this>  $query
+     */
+    #[Scope]
+    protected function awaitingQuoteResponse(Builder $query): void
+    {
+        $query->whereNotNull('quote_sent_at')
+            ->whereNull('quote_response')
+            ->where('billing_mode', BillingMode::Chargeable);
     }
 
     /**

@@ -54,7 +54,7 @@
             <div class="flex flex-col gap-3.5">
                 <div class="font-mono text-[11px] tracking-[0.1em] text-muted">price</div>
                 <div class="font-display text-[clamp(30px,3.6vw,44px)] font-extrabold leading-none tracking-[-0.04em]">
-                    {{ $proposal->team->money($proposal->price) }} + VAT
+                    {{ $proposal->team->money($proposal->price) }}@if (\App\Models\StudioSetting::current()->chargesVat()) + VAT @endif
                 </div>
                 <div class="text-[13px] text-muted">
                     {{ __('Fixed price. :weeks weeks from sign-off.', ['weeks' => $proposal->weeks]) }}

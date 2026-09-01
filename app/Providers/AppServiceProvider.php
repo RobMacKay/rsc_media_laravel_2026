@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\StudioSetting;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +16,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // There is exactly one settings row, so anything type-hinting the model
+        // wants that row. Without this the container hands out a blank model,
+        // and an invoice built through it would quietly use the class defaults
+        // for VAT and payment terms rather than what the studio actually set.
+        $this->app->bind(StudioSetting::class, fn () => StudioSetting::current());
     }
 
     /**

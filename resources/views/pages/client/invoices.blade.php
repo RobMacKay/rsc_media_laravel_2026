@@ -169,7 +169,10 @@ class extends Component {
 
         <div class="flex flex-wrap gap-x-6 gap-y-2.5 px-[22px] py-4 font-mono text-[11px] text-muted">
             <span>{{ __(':shown of :total invoices', ['shown' => $this->invoices->count(), 'total' => $this->allInvoices->count()]) }}</span>
-            <span class="ms-auto">{{ __(':total shown, inc VAT', ['total' => \App\Support\Money::total($this->invoices, fn (Invoice $invoice) => $invoice->total(), fn (Invoice $invoice) => $invoice->currency)]) }}</span>
+            <span class="ms-auto">@php $shown = \App\Support\Money::total($this->invoices, fn (Invoice $invoice) => $invoice->total(), fn (Invoice $invoice) => $invoice->currency); @endphp
+            {{ StudioSetting::current()->chargesVat()
+                ? __(':total shown, inc VAT', ['total' => $shown])
+                : __(':total shown', ['total' => $shown]) }}</span>
         </div>
     </div>
 

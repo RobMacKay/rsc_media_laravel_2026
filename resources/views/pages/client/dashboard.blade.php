@@ -3,6 +3,7 @@
 use App\Models\Invoice;
 use App\Models\Project;
 use App\Models\ProjectUpdate;
+use App\Models\StudioSetting;
 use App\Models\Team;
 use App\Models\Ticket;
 use Illuminate\Database\Eloquent\Collection;
@@ -28,6 +29,15 @@ class extends Component {
     /**
      * Get the project the client most wants progress on: the one still being built.
      */
+    /**
+     * Get the studio's settings, for whether VAT is in play.
+     */
+    #[Computed]
+    public function settings(): StudioSetting
+    {
+        return StudioSetting::current();
+    }
+
     #[Computed]
     public function currentProject(): ?Project
     {
@@ -153,7 +163,8 @@ class extends Component {
                 </div>
                 <div class="mt-1.5 text-[13px] text-muted">
                     {{ $this->nextInvoice
-                        ? $this->nextInvoice->money($this->nextInvoice->amount).' + VAT, '.$this->nextInvoice->type->label()
+                        ? $this->nextInvoice->money($this->nextInvoice->amount)
+                            .($this->settings->chargesVat() ? ' + VAT, ' : ', ').$this->nextInvoice->type->label()
                         : __('Everything is settled') }}
                 </div>
             </x-rsc.panel>

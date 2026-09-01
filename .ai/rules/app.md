@@ -53,3 +53,14 @@ Nothing is publicly reachable. `AttachmentDownloadController` (`GET /files/{atta
 Anything attachable implements `App\Contracts\HasAttachments`, which exists to supply `teamId()` — that is what decides who may download.
 
 Never hardcode a size limit. `Attachment::maxUploadKb()` takes the smallest of `upload_max_filesize`, `post_max_size` and our own constant, so the hint in the UI and the validation rule both tell the truth on whatever server is running. PHP rejects an oversized upload before Laravel sees it, so promising more than the server accepts fails with nothing useful to show.
+
+## Ticket update badges, and never mention VAT unless it is charged
+`ticket_reads` holds when each person last opened each ticket. `Ticket::hasUpdateFor($user)` compares it to `updated_at`, and a ticket nobody has opened counts as an update — a new ticket to the studio, a colleague's ticket to a client. Load with the `withReadsFor($user)` scope so a list does not query per row.
+
+Mark read on open **and after every action that touches the ticket**, in both `pages::client.tickets` and `pages::admin.queue` (`markOpenTicketRead()` / `markCurrentRead()`). Comments and quotes call `touch()`, so without that your own reply bumps `updated_at` past your own read mark and the ticket comes straight back flagged as new to the person who just wrote it.
+
+`Ticket::awaitingQuoteResponse()` is the scope behind the "needs you" badge and the header counts; it mirrors `hasQuoteAwaitingResponse()` so a count and a row badge cannot disagree.
+
+Nothing user-facing may mention VAT unless `StudioSetting::chargesVat()` — the studio is not registered today and wants the option later. That follows `effectiveVatRate()`, so a figure and its label always agree. Invoice documents gate on the invoice's own snapshotted `vat_rate` instead, so an invoice raised while registered keeps its VAT line afterwards.
+
+`StudioSetting` is bound in the container to `current()`. Without it, anything type-hinting the model gets a blank one and quietly bills the class defaults for VAT and payment terms rather than the studio's saved settings.

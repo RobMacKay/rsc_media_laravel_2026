@@ -158,15 +158,14 @@ class extends Component {
                     <td class="py-1.5 text-muted">{{ __('Subtotal') }}</td>
                     <td class="py-1.5 text-right">{{ $money($invoice->amount) }}</td>
                 </tr>
-                <tr>
-                    <td class="py-1.5 text-muted">
-                        {{ __('VAT') }}
-                        @if ($invoice->vat_rate > 0)
-                            {{ __('at :rate%', ['rate' => rtrim(rtrim(number_format($invoice->vat_rate, 1), '0'), '.')]) }}
-                        @endif
-                    </td>
-                    <td class="py-1.5 text-right">{{ $money($invoice->vatAmount()) }}</td>
-                </tr>
+                @if ($invoice->vat_rate > 0)
+                    <tr>
+                        <td class="py-1.5 text-muted">
+                            {{ __('VAT at :rate%', ['rate' => rtrim(rtrim(number_format($invoice->vat_rate, 1), '0'), '.')]) }}
+                        </td>
+                        <td class="py-1.5 text-right">{{ $money($invoice->vatAmount()) }}</td>
+                    </tr>
+                @endif
                 <tr class="border-t-2 border-line">
                     <td class="pt-2.5 font-display text-[18px] font-bold">{{ __('Total due') }}</td>
                     <td class="pt-2.5 text-right font-display text-[18px] font-bold">{{ $money($invoice->total()) }}</td>
