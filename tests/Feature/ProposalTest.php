@@ -321,3 +321,27 @@ test('a proposal cannot be signed off twice', function () {
     expect(Project::count())->toBe(1)
         ->and(Invoice::count())->toBe(1);
 });
+
+test('a long brief survives sign-off', function () {
+    // proposals.brief is text and the form allows 5,000 characters, but
+    // approve() copies it into projects.summary. When that was a varchar(255),
+    // MySQL rejected the insert and rolled the whole approval back.
+    $team = Team::factory()->create();
+    $user = memberOf($team, ClientAccess::Full);
+
+    $brief = str_repeat('A long and detailed brief about the work we need doing. ', 40);
+
+    $proposal = Proposal::factory()->for($team)->create([
+        'status' => ProposalStatus::Sent,
+        'brief' => $brief,
+        'price' => 4000,
+        'deposit_percent' => 40,
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::client.projects')
+        ->call('approve', $proposal->id)
+        ->assertHasNoErrors();
+
+    expect($proposal->fresh()->project->summary)->toBe($brief);
+});

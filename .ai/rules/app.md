@@ -44,3 +44,12 @@ Skipping sets `onboarded_at` too — the wizard promises everything is changeabl
 Owners (`ClientAccess::Full`) get company → details → team; someone who joined on an invite gets only their own details, because their owner already did the other two. `steps()` is the single source for that, and `saveCompany()`/`invite()` re-check it with `abort_unless`.
 
 `teams.systems` is what the client says the studio looks after, and feeds the ticket form's system dropdown. `team_invitations.name` and `.access` are honoured by `CreateNewUser`, so the access chosen when inviting is what the person actually joins on.
+
+## Attached files are private and served through one route
+Uploads go through `App\Actions\Attachments\StoreAttachment` — the one place a file is written. It stores on the `local` (private) disk under `attachments/{type}/{id}/{ulid}.{ext}`: the name on disk is a ULID so nothing user-supplied touches the filesystem and identical filenames cannot collide. The original name is kept in the `name` column for display and for the download filename.
+
+Nothing is publicly reachable. `AttachmentDownloadController` (`GET /files/{attachment}`) is the only way to get a file, and it checks `Attachment::isVisibleTo()`: studio staff see everything, a client sees only their own team's files and only where `shared_with_client` is true. Deleting the row deletes the file, via a `deleted` hook on the model.
+
+Anything attachable implements `App\Contracts\HasAttachments`, which exists to supply `teamId()` — that is what decides who may download.
+
+Never hardcode a size limit. `Attachment::maxUploadKb()` takes the smallest of `upload_max_filesize`, `post_max_size` and our own constant, so the hint in the UI and the validation rule both tell the truth on whatever server is running. PHP rejects an oversized upload before Laravel sees it, so promising more than the server accepts fails with nothing useful to show.

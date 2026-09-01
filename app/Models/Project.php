@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Contracts\HasAttachments;
 use App\Enums\InvoiceType;
 use App\Enums\ProjectPhase;
 use Database\Factories\ProjectFactory;
@@ -43,7 +44,7 @@ use Illuminate\Support\Carbon;
     'due_on', 'completed_on', 'waiting_on_client', 'hours_used', 'hours_budgeted',
     'value_label', 'agreed_value',
 ])]
-class Project extends Model
+class Project extends Model implements HasAttachments
 {
     /** @use HasFactory<ProjectFactory> */
     use HasFactory;
@@ -96,6 +97,14 @@ class Project extends Model
     public function attachments(): MorphMany
     {
         return $this->morphMany(Attachment::class, 'attachable');
+    }
+
+    /**
+     * Get the client business this record belongs to.
+     */
+    public function teamId(): int
+    {
+        return $this->team_id;
     }
 
     /**

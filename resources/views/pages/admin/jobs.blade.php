@@ -1,19 +1,33 @@
 <?php
 
+use App\Actions\Attachments\StoreAttachment;
 use App\Enums\ProjectPhase;
+use App\Models\Attachment;
 use App\Models\Project;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 new
 #[Layout('layouts::rsc.admin')]
 #[Title('Jobs')]
 class extends Component {
+    use WithFileUploads;
+
+    /** Which job's files are open, since only one panel shows at a time. */
+    public ?int $filesForJobId = null;
+
+    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    public array $uploads = [];
+
+    public bool $shareUploads = true;
+
     /**
      * Get every live job across all clients.
      *
@@ -27,6 +41,87 @@ class extends Component {
             ->withCount('attachments')
             ->orderBy('due_on')
             ->get();
+    }
+
+    /**
+     * Get the job whose files are open, if any.
+     */
+    #[Computed]
+    public function openJob(): ?Project
+    {
+        return $this->filesForJobId === null
+            ? null
+            : $this->jobs->firstWhere('id', $this->filesForJobId);
+    }
+
+    /**
+     * Show or hide the files for a job.
+     */
+    public function toggleFiles(int $projectId): void
+    {
+        $this->filesForJobId = $this->filesForJobId === $projectId ? null : $projectId;
+
+        $this->reset('uploads');
+        $this->resetValidation();
+
+        unset($this->openJob);
+    }
+
+    /**
+     * Attach one or more files to the job whose panel is open.
+     */
+    public function attachFiles(): void
+    {
+        $job = $this->openJob;
+
+        abort_unless($job, 404);
+
+        $this->validate(
+            [
+                'uploads' => ['required', 'array', 'max:10'],
+                'uploads.*' => Attachment::rules(Attachment::STUDIO_MIMES, Attachment::maxUploadKb(Attachment::STUDIO_MAX_KB)),
+            ],
+            [
+                'uploads.required' => __('Choose a file first.'),
+                'uploads.max' => __('Ten files at a time is the limit.'),
+                ...Attachment::messages('uploads.*', Attachment::STUDIO_MIMES, Attachment::maxUploadKb(Attachment::STUDIO_MAX_KB)),
+            ],
+            ['uploads.*' => __('file')],
+        );
+
+        foreach ($this->uploads as $upload) {
+            app(StoreAttachment::class)->handle($job, $upload, Auth::user(), $this->shareUploads);
+        }
+
+        $count = count($this->uploads);
+
+        $this->reset('uploads');
+
+        unset($this->jobs, $this->openJob);
+
+        Flux::toast(variant: 'success', text: trans_choice(
+            '{1}Attached 1 file.|[2,*]Attached :count files.',
+            $count,
+            ['count' => $count],
+        ));
+    }
+
+    /**
+     * Remove a file from the job whose panel is open.
+     */
+    public function removeFile(int $attachmentId): void
+    {
+        $job = $this->openJob;
+
+        abort_unless($job, 404);
+
+        $attachment = $job->attachments()->findOrFail($attachmentId);
+
+        $attachment->delete();
+
+        unset($this->jobs, $this->openJob);
+
+        Flux::toast(variant: 'success', text: __('Removed :name.', ['name' => $attachment->name]));
     }
 
     /**
@@ -133,11 +228,45 @@ class extends Component {
 
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-2.5 border-t border-line pt-3 font-mono text-[11px]">
                         <span class="me-auto text-muted">{{ trans_choice('{0}No files|{1}1 file|[2,*]:count files', $job->attachments_count, ['count' => $job->attachments_count]) }}</span>
+                        <button type="button" wire:click="toggleFiles({{ $job->id }})" class="cursor-pointer text-brand">
+                            {{ $filesForJobId === $job->id ? __('hide files') : __('attach file') }}
+                        </button>
                         <button type="button" class="cursor-pointer text-brand"
                                 x-on:click="$wire.saveJob({{ $job->id }}, { percent, milestone, due_on: due || null, waiting_on_client: waiting })">
                             {{ __('save changes') }}
                         </button>
                     </div>
+
+                    @if ($filesForJobId === $job->id)
+                        <div class="flex flex-col gap-3.5 border-t border-line pt-3.5">
+                            @foreach ($job->attachments as $file)
+                                <x-rsc.attachment :file="$file" show-share wire:key="file-{{ $file->id }}">
+                                    <x-slot:action>
+                                        <button type="button" wire:click="removeFile({{ $file->id }})"
+                                                wire:confirm="{{ __('Remove :name?', ['name' => $file->name]) }}"
+                                                class="cursor-pointer bg-transparent p-0 font-mono text-[11px] text-muted transition-colors hover:text-warm">
+                                            {{ __('remove') }}
+                                        </button>
+                                    </x-slot:action>
+                                </x-rsc.attachment>
+                            @endforeach
+
+                            <x-rsc.dropzone name="uploads" model="uploads" multiple
+                                            :title="__('Attach a file')"
+                                            :hint="__('Quotes, invoices, specs, screenshots. Up to :size.', ['size' => \Illuminate\Support\Number::fileSize(\App\Models\Attachment::maxUploadKb(\App\Models\Attachment::STUDIO_MAX_KB) * 1024)])" />
+
+                            <label class="flex cursor-pointer items-center gap-2.5 text-[13px] text-muted">
+                                <input type="checkbox" wire:model.live="shareUploads" class="size-4 accent-[var(--rsc-accent)]">
+                                <span>{{ __('Visible to the client as soon as it uploads') }}</span>
+                            </label>
+
+                            @if ($uploads)
+                                <x-rsc.button wire:click="attachFiles" class="self-start !px-5 !py-2.5 !text-sm">
+                                    {{ trans_choice('{1}Upload 1 file|[2,*]Upload :count files', count($uploads), ['count' => count($uploads)]) }}
+                                </x-rsc.button>
+                            @endif
+                        </div>
+                    @endif
                 </div>
             </section>
         @endforeach

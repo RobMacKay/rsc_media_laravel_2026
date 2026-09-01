@@ -65,4 +65,17 @@
             </div>
         </div>
     @endif
+
+    @php $files = $project->attachments->where('shared_with_client', true); @endphp
+
+    @if ($files->isNotEmpty())
+        <div class="mt-[22px] border-t border-line pt-5">
+            <div class="mb-2.5 font-mono text-[11px] text-muted">files</div>
+            <div class="flex flex-col gap-2.5">
+                @foreach ($files as $file)
+                    <x-rsc.attachment :file="$file" wire:key="project-file-{{ $file->id }}" />
+                @endforeach
+            </div>
+        </div>
+    @endif
 </section>
