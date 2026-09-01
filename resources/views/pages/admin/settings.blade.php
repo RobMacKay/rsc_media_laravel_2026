@@ -381,10 +381,14 @@ class extends Component {
                     <x-rsc.input type="number" min="0" step="0.5" wire:model.live="studio.vat_rate" class="!py-3" />
                 </x-rsc.field>
             </div>
-            <p class="mt-4 text-[13px] text-muted text-pretty">
-                {{ ($studio['vat_registered'] ?? false)
-                    ? __('Invoices add :rate% VAT and show your VAT number.', ['rate' => rtrim(rtrim(number_format((float) ($studio['vat_rate'] ?? 0), 1), '0'), '.')])
-                    : __('Invoices go out with no VAT line at all.') }}
+            <p class="mt-4 text-[13px] {{ ($studio['vat_registered'] ?? false) && blank($studio['vat_number'] ?? null) ? 'text-warm' : 'text-muted' }} text-pretty">
+                @if (! ($studio['vat_registered'] ?? false))
+                    {{ __('Invoices go out with no VAT line at all, and nothing anywhere mentions VAT.') }}
+                @elseif (blank($studio['vat_number'] ?? null))
+                    {{ __('Add your VAT number to start charging VAT. A VAT invoice has to show it, so until it is here nothing charges or mentions VAT.') }}
+                @else
+                    {{ __('Invoices add :rate% VAT and show your VAT number.', ['rate' => rtrim(rtrim(number_format((float) ($studio['vat_rate'] ?? 0), 1), '0'), '.')]) }}
+                @endif
             </p>
         </x-rsc.panel>
 
