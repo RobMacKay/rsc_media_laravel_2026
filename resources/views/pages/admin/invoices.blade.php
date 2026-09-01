@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Billing\RaiseInvoice;
+use App\Actions\Billing\RaisePlanInvoices;
 use App\Enums\BillingMode;
 use App\Enums\InvoiceStatus;
 use App\Enums\InvoiceType;
@@ -265,6 +266,54 @@ class extends Component {
     }
 
     /**
+     * Get the clients still owing this month's plan invoice.
+     *
+     * @return Collection<int, Team>
+     */
+    #[Computed]
+    public function plansToBill(): Collection
+    {
+        return $this->planRaiser()->due();
+    }
+
+    /**
+     * Raise one client's plan invoice ahead of the scheduled run.
+     */
+    public function raisePlan(int $teamId): void
+    {
+        $team = Team::findOrFail($teamId);
+
+        $invoice = $this->planRaiser()->raiseFor($team);
+
+        abort_unless($invoice, 422);
+
+        $this->refreshBilling();
+
+        Flux::toast(variant: 'success', text: __('Raised :number for :client.', [
+            'number' => $invoice->number,
+            'client' => $team->name,
+        ]));
+    }
+
+    /**
+     * Raise every outstanding plan invoice for this month at once.
+     */
+    public function raiseAllPlans(): void
+    {
+        $raised = $this->planRaiser()->handle();
+
+        abort_if($raised->isEmpty(), 422);
+
+        $this->refreshBilling();
+
+        Flux::toast(variant: 'success', text: trans_choice(
+            '{1}Raised one plan invoice.|[2,*]Raised :count plan invoices.',
+            $raised->count(),
+            ['count' => $raised->count()],
+        ));
+    }
+
+    /**
      * Raise the balance owed on a project.
      */
     public function raiseFinal(int $projectId): void
@@ -312,13 +361,22 @@ class extends Component {
     }
 
     /**
+     * Get the action behind both the button and the scheduled monthly run.
+     */
+    private function planRaiser(): RaisePlanInvoices
+    {
+        return new RaisePlanInvoices($this->settings);
+    }
+
+    /**
      * Drop the cached billing figures after raising something.
      */
     private function refreshBilling(): void
     {
         unset(
             $this->allInvoices, $this->invoices, $this->money,
-            $this->collected, $this->months, $this->projectsToBill, $this->ticketsToBill,
+            $this->collected, $this->months,
+            $this->projectsToBill, $this->ticketsToBill, $this->plansToBill,
         );
     }
 
@@ -443,12 +501,12 @@ class extends Component {
             </div>
 
             <div class="mt-4 border-t border-line pt-3.5 font-mono text-[11px] text-muted">
-                {{ __('// plan invoices go out automatically on the 1st') }}
+                {{ __('// plan invoices go out automatically on the 1st, or send them early above') }}
             </div>
         </x-rsc.panel>
     </div>
 
-    @if ($this->projectsToBill->isNotEmpty() || $this->ticketsToBill->isNotEmpty())
+    @if ($this->projectsToBill->isNotEmpty() || $this->ticketsToBill->isNotEmpty() || $this->plansToBill->isNotEmpty())
         <x-rsc.panel class="mb-[clamp(12px,1.4vw,18px)]">
             <div class="mb-4 flex flex-wrap items-center gap-3 font-mono text-[11px] tracking-[0.08em] text-muted">
                 <span>ready_to_invoice</span>
@@ -457,7 +515,57 @@ class extends Component {
                 </span>
             </div>
 
+            @if ($this->plansToBill->isNotEmpty())
+                <div class="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2.5 rounded-2xl border border-line px-[18px] py-3.5">
+                    <div class="min-w-0">
+                        <div class="font-display text-[15px] font-bold">
+                            {{ trans_choice(
+                                '{1}One plan invoice for :month|[2,*]:count plan invoices for :month',
+                                $this->plansToBill->count(),
+                                ['count' => $this->plansToBill->count(), 'month' => now()->format('F')],
+                            ) }}
+                        </div>
+                        <div class="mt-0.5 text-[13px] text-muted">
+                            {{ __('These go out on their own on the 1st. Raise them now if you would rather not wait.') }}
+                        </div>
+                    </div>
+
+                    <x-rsc.button wire:click="raiseAllPlans"
+                                  wire:confirm="{{ __('Raise all :count plan invoices now?', ['count' => $this->plansToBill->count()]) }}"
+                                  class="ms-auto !px-5 !py-2.5 !text-sm">
+                        {{ __('Send them now') }}
+                    </x-rsc.button>
+                </div>
+            @endif
+
             <div class="flex flex-col">
+                @foreach ($this->plansToBill as $team)
+                    <div class="grid grid-cols-[1fr_auto] items-center gap-x-5 gap-y-2 border-t border-line py-3.5"
+                         wire:key="bill-plan-{{ $team->id }}">
+                        <div class="min-w-0">
+                            <div class="mb-1 font-mono text-[11px] text-muted">
+                                {{ __('plan') }} · {{ $team->name }} · {{ str(now()->format('F'))->lower() }}
+                            </div>
+                            <div class="font-display text-base font-bold tracking-[-0.015em]">{{ $team->plan->name }}</div>
+                            <div class="mt-1 text-[13px] text-muted">
+                                {{ __('Monthly retainer · :terms day terms', [
+                                    'terms' => $team->effectivePaymentTerms($this->settings),
+                                ]) }}
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center justify-end gap-3">
+                            <div class="text-end">
+                                <div class="font-display text-[19px] font-bold tracking-[-0.02em]">{{ $money($team->plan->price) }}</div>
+                                <div class="font-mono text-[10px] text-muted">{{ __('a month') }}</div>
+                            </div>
+                            <x-rsc.button variant="outline" wire:click="raisePlan({{ $team->id }})" class="!px-5 !py-2.5 !text-sm">
+                                {{ __('Raise') }}
+                            </x-rsc.button>
+                        </div>
+                    </div>
+                @endforeach
+
                 @foreach ($this->projectsToBill as $project)
                     <div class="grid grid-cols-[1fr_auto] items-center gap-x-5 gap-y-2 border-t border-line py-3.5"
                          wire:key="bill-project-{{ $project->id }}">
