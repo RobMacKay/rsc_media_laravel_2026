@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $email
  * @property string|null $phone
  * @property string|null $website
+ * @property string|null $welcome_video_url
  * @property int $hour_rate
  * @property int $day_rate
  * @property float $day_length
@@ -35,7 +36,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  */
 #[Fillable([
-    'company_name', 'company_number', 'address', 'email', 'phone', 'website',
+    'company_name', 'company_number', 'address', 'email', 'phone', 'website', 'welcome_video_url',
     'hour_rate', 'day_rate', 'day_length', 'minimum_charge', 'out_of_hours_uplift',
     'payment_terms_days', 'late_fee_percent', 'vat_registered', 'vat_number', 'vat_rate',
     'account_name', 'bank_name', 'sort_code', 'account_number', 'reference_format',

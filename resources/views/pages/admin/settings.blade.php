@@ -36,6 +36,7 @@ class extends Component {
 
         $this->studio = $settings->only([
             'company_name', 'company_number', 'address', 'email', 'phone', 'website',
+            'welcome_video_url',
             'hour_rate', 'day_rate', 'day_length', 'minimum_charge', 'out_of_hours_uplift',
             'payment_terms_days', 'late_fee_percent', 'vat_registered', 'vat_number', 'vat_rate',
             'account_name', 'bank_name', 'sort_code', 'account_number', 'reference_format',
@@ -236,6 +237,7 @@ class extends Component {
             'studio.sort_code' => ['nullable', 'string', 'regex:/^\d{2}-\d{2}-\d{2}$/'],
             'studio.account_number' => ['nullable', 'string', 'regex:/^\d{8}$/'],
             'studio.reference_format' => ['required', 'string', 'max:255'],
+            'studio.welcome_video_url' => ['nullable', 'url', 'max:255'],
             'plans.*.name' => ['required', 'string', 'max:255'],
             'plans.*.price' => ['required', 'integer', 'min:0'],
             'plans.*.hours_per_month' => ['required', 'numeric', 'min:0'],
@@ -320,6 +322,10 @@ class extends Component {
                     </x-rsc.field>
                     <x-rsc.field label="phone" name="studio.phone">
                         <x-rsc.input wire:model="studio.phone" class="!py-3" />
+                    </x-rsc.field>
+                    <x-rsc.field label="welcome_video_url" name="studio.welcome_video_url" class="[grid-column:1/-1]"
+                                 hint="{{ __('An embed URL, shown at the top of the welcome wizard a new client sees. Leave blank for no video.') }}">
+                        <x-rsc.input wire:model="studio.welcome_video_url" placeholder="https://player.vimeo.com/video/000000" class="!py-3" />
                     </x-rsc.field>
                 </div>
             </div>

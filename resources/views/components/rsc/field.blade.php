@@ -1,6 +1,6 @@
 @props(['label' => null, 'name' => null, 'hint' => null])
 
-<label class="block">
+<label {{ $attributes->class('block') }}>
     @if ($label)
         <span class="mb-2 block font-mono text-[11px] text-muted">{{ $label }}</span>
     @endif

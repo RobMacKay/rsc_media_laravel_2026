@@ -93,7 +93,9 @@ class CreateNewUser implements CreatesNewUsers
         $invitation->team->memberships()->create([
             'user_id' => $user->id,
             'role' => TeamRole::Member,
-            'access' => ClientAccess::Tickets,
+            // The access the inviter picked, falling back for invitations that
+            // predate the field.
+            'access' => $invitation->access ?? ClientAccess::Tickets,
         ]);
 
         $invitation->update(['accepted_at' => now()]);
