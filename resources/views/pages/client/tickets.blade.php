@@ -6,6 +6,7 @@ use App\Enums\TicketPriority;
 use App\Enums\TicketStatus;
 use App\Enums\TicketType;
 use App\Models\Attachment;
+use App\Models\StudioSetting;
 use App\Models\Team;
 use App\Models\Ticket;
 use App\Models\TicketComment;
@@ -67,6 +68,15 @@ class extends Component {
     }
 
     /**
+     * Get the studio's settings, for whether VAT is in play.
+     */
+    #[Computed]
+    public function settings(): StudioSetting
+    {
+        return StudioSetting::current();
+    }
+
+    /**
      * Get the tickets matching the selected status filter.
      *
      * @return Collection<int, Ticket>
@@ -76,8 +86,27 @@ class extends Component {
     {
         return $this->team->tickets()
             ->when($this->filter !== 'all', fn ($query) => $query->where('status', $this->filter))
+            ->withReadsFor(Auth::user())
             ->latest('updated_at')
             ->get();
+    }
+
+    /**
+     * Get how many quotes are sitting waiting for this client to decide.
+     */
+    #[Computed]
+    public function awaitingYou(): int
+    {
+        return $this->team->tickets()->awaitingQuoteResponse()->count();
+    }
+
+    /**
+     * Get how many tickets have moved since this person last looked at them.
+     */
+    #[Computed]
+    public function updatedCount(): int
+    {
+        return $this->tickets->filter(fn (Ticket $ticket) => $ticket->hasUpdateFor(Auth::user()))->count();
     }
 
     /**
@@ -160,6 +189,24 @@ class extends Component {
         $this->resetValidation();
 
         unset($this->selected, $this->conversation, $this->sharedFiles);
+
+        $this->selected?->markReadBy(Auth::user());
+
+        unset($this->tickets, $this->updatedCount);
+    }
+
+    /**
+     * Note the open ticket as read, after something has changed it.
+     *
+     * Without this your own reply or approval bumps updated_at past your own
+     * read mark, and the ticket comes back flagged as new to the person who
+     * just did the thing.
+     */
+    private function markOpenTicketRead(): void
+    {
+        $this->selected?->fresh()?->markReadBy(Auth::user());
+
+        unset($this->tickets, $this->updatedCount);
     }
 
     /**
@@ -201,6 +248,8 @@ class extends Component {
         $this->reset('comment', 'reply');
 
         unset($this->selected, $this->conversation, $this->tickets, $this->sharedFiles);
+
+        $this->markOpenTicketRead();
     }
 
     /**
@@ -227,6 +276,8 @@ class extends Component {
         $this->reset('reply');
 
         unset($this->selected, $this->sharedFiles, $this->tickets);
+
+        $this->markOpenTicketRead();
 
         Flux::toast(variant: 'success', text: __('Attached :name.', ['name' => $file->name]));
     }
@@ -269,6 +320,8 @@ class extends Component {
         ]);
 
         unset($this->selected, $this->conversation, $this->tickets);
+
+        $this->markOpenTicketRead();
 
         Flux::toast(
             variant: $decision === QuoteResponse::Approved ? 'success' : 'warning',
@@ -351,6 +404,16 @@ class extends Component {
         <div>
             <x-rsc.kicker class="mb-2.5">support</x-rsc.kicker>
             <x-rsc.heading>{{ __('Tickets') }}</x-rsc.heading>
+            @if ($this->awaitingYou > 0 || $this->updatedCount > 0)
+                <p class="mt-3 flex flex-wrap items-center gap-2.5 text-[15px] text-muted">
+                    @if ($this->awaitingYou > 0)
+                        <x-rsc.pill tone="warm">{{ trans_choice('{1}1 quote to approve|[2,*]:count quotes to approve', $this->awaitingYou, ['count' => $this->awaitingYou]) }}</x-rsc.pill>
+                    @endif
+                    @if ($this->updatedCount > 0)
+                        <x-rsc.pill tone="brand">{{ trans_choice('{1}1 ticket has moved|[2,*]:count tickets have moved', $this->updatedCount, ['count' => $this->updatedCount]) }}</x-rsc.pill>
+                    @endif
+                </p>
+            @endif
         </div>
 
         @if (auth()->user()->accessFor()->canRaiseTickets())
@@ -445,28 +508,44 @@ class extends Component {
         @endforeach
     </div>
 
+    {{-- The columns stack into a card below lg. They used to sit in a 700px
+         scroller, which put the status and the "needs approving" flag off the
+         right edge of a phone with nothing to say they were there. --}}
     <div class="overflow-hidden rounded-[20px] border border-line bg-panel">
-        <div class="overflow-x-auto [overscroll-behavior-x:contain]">
-            <div class="min-w-[700px]">
-                <div class="grid grid-cols-[96px_1fr_150px_110px_130px] gap-4 border-b border-line px-[22px] py-3.5 font-mono text-[11px] tracking-[0.08em] text-muted">
+        <div>
+            <div>
+                <div class="hidden grid-cols-[96px_1fr_150px_110px_150px] gap-4 border-b border-line px-[22px] py-3.5 font-mono text-[11px] tracking-[0.08em] text-muted lg:grid">
                     <span>ref</span><span>ticket</span><span>system</span><span>priority</span><span>status</span>
                 </div>
 
                 @forelse ($this->tickets as $ticket)
+                    @php $needsYou = $ticket->hasQuoteAwaitingResponse(); @endphp
                     <button type="button" wire:click="openTicket('{{ $ticket->reference }}')"
                             x-on:click="panelOpen = true" wire:key="row-{{ $ticket->id }}"
-                            class="grid w-full cursor-pointer grid-cols-[96px_1fr_150px_110px_130px] items-center gap-x-4 gap-y-2 border-b border-line px-[22px] py-[18px] text-left transition-colors hover:rsc-tint">
-                        <span class="font-mono text-xs text-muted">{{ $ticket->reference }}</span>
+                            @class([
+                                'grid w-full cursor-pointer grid-cols-1 items-start gap-x-4 gap-y-2.5 border-b border-line px-[22px] py-[18px] text-left transition-colors hover:rsc-tint lg:grid-cols-[96px_1fr_150px_110px_150px] lg:items-center',
+                                'rsc-tint-warm' => $needsYou,
+                            ])>
+                        <span class="flex items-center gap-2.5 font-mono text-xs text-muted">
+                            {{ $ticket->reference }}
+                            @if ($ticket->hasUpdateFor(auth()->user()))
+                                <x-rsc.pill tone="brand" class="!px-2 !py-px !text-[10px] !tracking-[0.06em]">{{ __('new') }}</x-rsc.pill>
+                            @endif
+                        </span>
                         <span>
                             <span class="block font-display text-base font-bold tracking-[-0.015em]">{{ $ticket->title }}</span>
                             <span class="mt-[3px] block text-xs text-muted">{{ $ticket->updatedLabel() }}</span>
                         </span>
-                        <span class="text-[13px] text-muted">{{ $ticket->system }}</span>
-                        <span class="text-[13px] {{ $ticket->priority->isPressing() ? 'text-warm' : 'text-muted' }}">{{ $ticket->priority->label() }}</span>
-                        <span class="flex items-center gap-2 justify-self-start">
+                        <span class="text-[13px] text-muted">
+                            <span class="font-mono text-[11px] text-muted lg:hidden">{{ __('system') }} · </span>{{ $ticket->system }}
+                        </span>
+                        <span class="text-[13px] {{ $ticket->priority->isPressing() ? 'text-warm' : 'text-muted' }}">
+                            <span class="font-mono text-[11px] text-muted lg:hidden">{{ __('priority') }} · </span>{{ $ticket->priority->label() }}
+                        </span>
+                        <span class="flex flex-wrap items-center gap-2 justify-self-start">
                             <x-rsc.pill :tone="$ticket->status->tone()">{{ str($ticket->status->clientLabel())->lower() }}</x-rsc.pill>
-                            @if ($ticket->hasQuoteAwaitingResponse())
-                                <span class="font-mono text-[10px] text-warm">{{ __('quote') }}</span>
+                            @if ($needsYou)
+                                <x-rsc.pill tone="warm" class="!text-[10px] !tracking-[0.06em]">{{ __('needs you') }}</x-rsc.pill>
                             @endif
                         </span>
                     </button>
@@ -535,7 +614,9 @@ class extends Component {
                                     'rate' => $ticket->team->money((int) $ticket->quoted_rate),
                                 ]) }}
                             </span>
-                            <span class="w-full text-xs text-muted">{{ __('Excluding VAT. Nothing starts until you approve it.') }}</span>
+                            <span class="w-full text-xs text-muted">{{ $this->settings->chargesVat()
+                                    ? __('Excluding VAT. Nothing starts until you approve it.')
+                                    : __('Nothing starts until you approve it.') }}</span>
                         </div>
 
                         @if ($ticket->quote_response)

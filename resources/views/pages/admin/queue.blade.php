@@ -53,6 +53,7 @@ class extends Component {
     {
         return Ticket::query()
             ->with(['team', 'reporter', 'comments.author'])
+            ->withReadsFor(Auth::user())
             ->when($this->filter !== 'all', fn ($query) => $query->where('status', $this->filter))
             ->orderByRaw("CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END")
             ->latest('updated_at')
@@ -117,6 +118,41 @@ class extends Component {
         $this->resetValidation();
 
         unset($this->current);
+
+        $this->current?->markReadBy(Auth::user());
+
+        unset($this->tickets, $this->updatedCount);
+    }
+
+    /**
+     * Get how many tickets have moved since this person last opened them.
+     */
+    #[Computed]
+    public function updatedCount(): int
+    {
+        return $this->tickets->filter(fn (Ticket $ticket) => $ticket->hasUpdateFor(Auth::user()))->count();
+    }
+
+    /**
+     * Get how many quotes are sitting with clients, unanswered.
+     */
+    #[Computed]
+    public function awaitingClients(): int
+    {
+        return Ticket::query()->awaitingQuoteResponse()->count();
+    }
+
+    /**
+     * Note the open ticket as read, after something has changed it.
+     *
+     * Without this the studio's own reply bumps updated_at past its own read
+     * mark, and the ticket comes straight back flagged as new.
+     */
+    private function markCurrentRead(): void
+    {
+        $this->current?->fresh()?->markReadBy(Auth::user());
+
+        unset($this->tickets, $this->updatedCount);
     }
 
     /**
@@ -159,6 +195,8 @@ class extends Component {
 
         unset($this->current, $this->tickets);
 
+        $this->markCurrentRead();
+
         Flux::toast(variant: 'success', text: trans_choice(
             '{1}Attached 1 file.|[2,*]Attached :count files.',
             $count,
@@ -180,6 +218,8 @@ class extends Component {
         $attachment->delete();
 
         unset($this->current, $this->tickets);
+
+        $this->markCurrentRead();
 
         Flux::toast(variant: 'success', text: __('Removed :name.', ['name' => $attachment->name]));
     }
@@ -207,6 +247,8 @@ class extends Component {
 
         unset($this->tickets, $this->current);
 
+        $this->markCurrentRead();
+
         Flux::toast(variant: 'success', text: $this->replyMode === 'internal'
             ? __('Note saved.')
             : __('Reply sent to :client.', ['client' => $ticket->team->name]));
@@ -229,6 +271,8 @@ class extends Component {
         ]);
 
         unset($this->tickets, $this->current, $this->stats);
+
+        $this->markCurrentRead();
     }
 
     /**
@@ -262,6 +306,8 @@ class extends Component {
 
         unset($this->tickets, $this->current, $this->stats);
 
+        $this->markCurrentRead();
+
         Flux::toast(variant: 'success', text: $chargeable
             ? __('Quote sent to :client.', ['client' => $ticket->team->name])
             : __('Time logged against :reference.', ['reference' => $ticket->reference]));
@@ -273,6 +319,16 @@ class extends Component {
         <div>
             <x-rsc.kicker class="mb-2.5">{{ str(now()->format('l_j_F'))->lower() }}</x-rsc.kicker>
             <x-rsc.heading class="!text-[clamp(28px,4vw,46px)]">{{ __('Queue') }}</x-rsc.heading>
+            @if ($this->updatedCount > 0 || $this->awaitingClients > 0)
+                <p class="mt-3 flex flex-wrap items-center gap-2.5 text-[15px] text-muted">
+                    @if ($this->updatedCount > 0)
+                        <x-rsc.pill tone="brand">{{ trans_choice('{1}1 ticket has moved|[2,*]:count tickets have moved', $this->updatedCount, ['count' => $this->updatedCount]) }}</x-rsc.pill>
+                    @endif
+                    @if ($this->awaitingClients > 0)
+                        <x-rsc.pill tone="warm">{{ trans_choice('{1}1 quote with a client|[2,*]:count quotes with clients', $this->awaitingClients, ['count' => $this->awaitingClients]) }}</x-rsc.pill>
+                    @endif
+                </p>
+            @endif
         </div>
 
         <div class="flex flex-wrap gap-x-[26px] gap-y-2.5 font-mono text-[11px] text-muted">
@@ -302,7 +358,12 @@ class extends Component {
                             'background: color-mix(in srgb, var(--rsc-accent) 8%, transparent); border-left-color: var(--rsc-accent)' => $selected,
                             'background: transparent; border-left-color: transparent' => ! $selected,
                         ])>
-                    <span class="font-mono text-[11px] text-muted">{{ $ticket->reference }} · {{ $ticket->team->name }}</span>
+                    <span class="flex flex-wrap items-center gap-2 font-mono text-[11px] text-muted">
+                        {{ $ticket->reference }} · {{ $ticket->team->name }}
+                        @if ($ticket->hasUpdateFor(auth()->user()))
+                            <x-rsc.pill tone="brand" class="!px-2 !py-px !text-[10px] !tracking-[0.06em]">{{ __('new') }}</x-rsc.pill>
+                        @endif
+                    </span>
                     <x-rsc.pill :tone="$ticket->status->tone()" class="justify-self-end">{{ str($ticket->status->label())->lower() }}</x-rsc.pill>
                     <span class="col-span-full font-display text-base font-bold tracking-[-0.015em]">{{ $ticket->title }}</span>
                     <span class="text-xs text-muted">{{ $ticket->system }}</span>
@@ -399,7 +460,7 @@ class extends Component {
                             <x-rsc.input type="number" min="0" step="5" x-model.number="rate" class="!py-3" />
                         </x-rsc.field>
                         <div>
-                            <div class="mb-2 font-mono text-[11px] text-muted">total_ex_vat</div>
+                            <div class="mb-2 font-mono text-[11px] text-muted">{{ $this->settings->chargesVat() ? 'total_ex_vat' : 'total' }}</div>
                             <div class="font-display text-[clamp(24px,2.6vw,32px)] font-extrabold leading-tight tracking-[-0.03em]" x-text="total"></div>
                         </div>
                     </div>

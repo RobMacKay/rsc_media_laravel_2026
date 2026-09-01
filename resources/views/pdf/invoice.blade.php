@@ -170,15 +170,12 @@
                         <td class="muted">Subtotal</td>
                         <td class="right">{{ $invoice->money($invoice->amount, 2) }}</td>
                     </tr>
-                    <tr>
-                        <td class="muted">
-                            VAT
-                            @if ($invoice->vat_rate > 0)
-                                at {{ rtrim(rtrim(number_format($invoice->vat_rate, 1), '0'), '.') }}%
-                            @endif
-                        </td>
-                        <td class="right">{{ $invoice->money($invoice->vatAmount(), 2) }}</td>
-                    </tr>
+                    @if ($invoice->vat_rate > 0)
+                        <tr>
+                            <td class="muted">VAT at {{ rtrim(rtrim(number_format($invoice->vat_rate, 1), '0'), '.') }}%</td>
+                            <td class="right">{{ $invoice->money($invoice->vatAmount(), 2) }}</td>
+                        </tr>
+                    @endif
                     <tr class="grand">
                         <td>Total due</td>
                         <td class="right">{{ $invoice->money($invoice->total(), 2) }}</td>

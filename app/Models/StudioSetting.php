@@ -94,6 +94,18 @@ class StudioSetting extends Model
     }
 
     /**
+     * Determine whether VAT is actually charged on anything the studio sends.
+     *
+     * Nothing user-facing should mention VAT when it is not, so this is the
+     * one switch every "ex VAT" and "+ VAT" line is gated on. It follows
+     * effectiveVatRate(), so a figure and its label cannot disagree.
+     */
+    public function chargesVat(): bool
+    {
+        return $this->effectiveVatRate() > 0;
+    }
+
+    /**
      * Get the day rate implied by the hourly rate and the length of a working day.
      */
     public function impliedDayRate(): float

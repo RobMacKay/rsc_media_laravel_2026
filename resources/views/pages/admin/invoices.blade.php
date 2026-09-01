@@ -686,7 +686,7 @@ class extends Component {
                             </x-rsc.select>
                         </x-rsc.field>
 
-                        <x-rsc.field label="amount_ex_vat_{{ $currency->symbol() }}" name="amount">
+                        <x-rsc.field label="{{ $this->settings->chargesVat() ? 'amount_ex_vat' : 'amount' }}_{{ $currency->symbol() }}" name="amount">
                             <x-rsc.input type="number" min="0" step="10" wire:model="amount" class="!py-3" />
                         </x-rsc.field>
                     </div>
@@ -701,12 +701,18 @@ class extends Component {
                             $vat = $this->settings->effectiveVatRate();
                             $terms = $client?->effectivePaymentTerms($this->settings) ?? $this->settings->payment_terms_days;
                         @endphp
-                        @foreach ([
-                            ['ex_vat', $currency->format($amount)],
-                            ['vat_at_'.rtrim(rtrim(number_format($vat, 1), '0'), '.').'%', $currency->format(round($amount * $vat / 100))],
-                            ['total', $currency->format(round($amount * (1 + $vat / 100)))],
-                            ['due', now()->addDays($terms)->format('j M')],
-                        ] as [$label, $value])
+                        @php
+                            $rows = $vat > 0
+                                ? [
+                                    ['ex_vat', $currency->format($amount)],
+                                    ['vat_at_'.rtrim(rtrim(number_format($vat, 1), '0'), '.').'%', $currency->format(round($amount * $vat / 100))],
+                                    ['total', $currency->format(round($amount * (1 + $vat / 100)))],
+                                ]
+                                : [['total', $currency->format($amount)]];
+
+                            $rows[] = ['due', now()->addDays($terms)->format('j M')];
+                        @endphp
+                        @foreach ($rows as [$label, $value])
                             <span class="flex flex-col gap-1.5">
                                 <span class="font-mono text-[11px] text-muted">{{ $label }}</span>
                                 <span class="font-display text-base font-bold">{{ $value }}</span>
@@ -762,7 +768,8 @@ class extends Component {
 
         <div class="flex flex-wrap gap-x-6 gap-y-2.5 px-[22px] py-4 font-mono text-[11px] text-muted">
             <span>{{ __(':shown of :total invoices', ['shown' => $this->invoices->count(), 'total' => $this->allInvoices->count()]) }}</span>
-            <span class="ms-auto">{{ __(':total shown, inc VAT', ['total' => Money::total($this->invoices, fn (Invoice $invoice) => $invoice->total(), fn (Invoice $invoice) => $invoice->currency)]) }}</span>
+            <span class="ms-auto">@php $shown = Money::total($this->invoices, fn (Invoice $invoice) => $invoice->total(), fn (Invoice $invoice) => $invoice->currency); @endphp
+            {{ $this->settings->chargesVat() ? __(':total shown, inc VAT', ['total' => $shown]) : __(':total shown', ['total' => $shown]) }}</span>
         </div>
     </div>
 </div>
