@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AttachmentDownloadController;
 use App\Http\Controllers\InvoiceDownloadController;
+use App\Http\Controllers\SiteLogDownloadController;
 use App\Http\Middleware\EnsureUserHasClientAccess;
 use App\Http\Middleware\EnsureUserHasOnboarded;
 use App\Http\Middleware\EnsureUserIsStudioAdmin;
@@ -20,6 +21,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('projects', 'pages::client.projects')->name('projects');
         Route::livewire('team', 'pages::client.team')->name('team');
         Route::livewire('plan', 'pages::client.plan')->name('plan');
+        Route::livewire('health', 'pages::client.health')->name('health');
+        Route::get('health/{site}/log', SiteLogDownloadController::class)->name('health.log');
 
         Route::middleware(EnsureUserHasClientAccess::class.':billing')->group(function () {
             Route::livewire('invoices', 'pages::client.invoices')->name('invoices');

@@ -23,6 +23,7 @@ use Illuminate\Support\Carbon;
  * @property float $minimum_charge
  * @property int $out_of_hours_uplift
  * @property int $payment_terms_days
+ * @property int $site_limit
  * @property float $late_fee_percent
  * @property bool $vat_registered
  * @property string|null $vat_number
@@ -38,7 +39,7 @@ use Illuminate\Support\Carbon;
 #[Fillable([
     'company_name', 'company_number', 'address', 'email', 'phone', 'website', 'welcome_video_url',
     'hour_rate', 'day_rate', 'day_length', 'minimum_charge', 'out_of_hours_uplift',
-    'payment_terms_days', 'late_fee_percent', 'vat_registered', 'vat_number', 'vat_rate',
+    'payment_terms_days', 'site_limit', 'late_fee_percent', 'vat_registered', 'vat_number', 'vat_rate',
     'account_name', 'bank_name', 'sort_code', 'account_number', 'reference_format',
 ])]
 class StudioSetting extends Model
@@ -57,6 +58,7 @@ class StudioSetting extends Model
         'minimum_charge' => 0.5,
         'out_of_hours_uplift' => 50,
         'payment_terms_days' => 21,
+        'site_limit' => 5,
         'late_fee_percent' => 2,
         'vat_registered' => true,
         'vat_rate' => 20,

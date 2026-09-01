@@ -33,6 +33,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $hour_rate
  * @property int|null $day_rate
  * @property float|null $support_hours
+ * @property int|null $site_limit
  * @property int|null $payment_terms_days
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -45,12 +46,13 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Proposal> $proposals
  * @property-read Collection<int, Ticket> $tickets
  * @property-read Collection<int, Invoice> $invoices
+ * @property-read Collection<int, Site> $sites
  * @property-read Collection<int, ProjectUpdate> $updates
  */
 #[Fillable([
     'name', 'slug', 'is_personal', 'plan_id', 'requested_plan', 'billing_email',
     'company_number', 'address', 'vat_number', 'systems',
-    'purchase_order_ref', 'currency', 'hour_rate', 'day_rate', 'support_hours',
+    'purchase_order_ref', 'currency', 'hour_rate', 'day_rate', 'support_hours', 'site_limit',
     'payment_terms_days',
 ])]
 class Team extends Model
@@ -213,6 +215,24 @@ class Team extends Model
     public function effectivePaymentTerms(StudioSetting $settings): int
     {
         return $this->payment_terms_days ?? $settings->payment_terms_days;
+    }
+
+    /**
+     * Get how many sites this client may monitor.
+     */
+    public function effectiveSiteLimit(StudioSetting $settings): int
+    {
+        return $this->site_limit ?? $settings->site_limit;
+    }
+
+    /**
+     * Get the sites this client is monitoring.
+     *
+     * @return HasMany<Site, $this>
+     */
+    public function sites(): HasMany
+    {
+        return $this->hasMany(Site::class)->orderBy('name');
     }
 
     /**
