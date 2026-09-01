@@ -15,3 +15,12 @@ Two role systems run side by side on purpose:
 `users.is_admin` marks studio staff; `EnsureUserIsStudioAdmin` guards `/admin/*`. Login lands admins on `admin.queue` and everyone else on `client.dashboard` — the team slug is no longer in any URL, so don't reintroduce `route('dashboard')`.
 
 `StudioSetting::current()` is a singleton row; its defaults are declared on the model as well as the migration, because a freshly created row otherwise comes back with null attributes.
+
+## Invoices are raised in one place; only deposits and finals draw down a fixed price
+Every invoice is created through `App\Actions\Billing\RaiseInvoice`, so the number, VAT rate and due date are worked out identically whether it came from a signed off proposal, a finished project, a chargeable ticket or the one-off admin form. Do not call `Invoice::create()` directly.
+
+`Project::contractInvoiced()` counts only `Deposit` and `Final` invoices when working out `balanceToInvoice()`. A chargeable ticket billed against a project is extra to the fixed fee, and plan invoices are the separate monthly retainer — counting either silently under-bills the final invoice. This was a real bug: a £260 ticket reduced a £3,072 balance to £2,812.
+
+`agreed_value` is the numeric contract total; `value_label` is display only. Null `agreed_value` means there is nothing fixed to bill against, such as a care plan, and the project stays out of the billing queue.
+
+A ticket is billable when it is `Chargeable`, the client approved the quote, and no invoice references it — `Ticket::isReadyToInvoice()`. `invoices.ticket_id` is what stops it being billed twice.

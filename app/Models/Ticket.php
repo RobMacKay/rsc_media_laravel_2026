@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 
@@ -46,6 +47,7 @@ use Illuminate\Support\Carbon;
  * @property-read Project|null $project
  * @property-read User|null $reporter
  * @property-read Collection<int, Attachment> $attachments
+ * @property-read Invoice|null $invoice
  * @property-read Collection<int, TicketComment> $comments
  */
 #[Fillable([
@@ -110,6 +112,16 @@ class Ticket extends Model
     }
 
     /**
+     * Get the invoice raised for this ticket, if it has been billed.
+     *
+     * @return HasOne<Invoice, $this>
+     */
+    public function invoice(): HasOne
+    {
+        return $this->hasOne(Invoice::class);
+    }
+
+    /**
      * Get the files attached to this ticket.
      *
      * @return MorphMany<Attachment, $this>
@@ -146,6 +158,21 @@ class Ticket extends Model
         return $this->quote_sent_at !== null
             && $this->quote_response === null
             && $this->billing_mode === BillingMode::Chargeable;
+    }
+
+    /**
+     * Determine whether this ticket is chargeable work the client has agreed
+     * to, and so is waiting to be invoiced.
+     *
+     * Support-hours and no-charge tickets never produce an invoice: the first
+     * comes off the monthly allowance, the second is logged for the record.
+     */
+    public function isReadyToInvoice(): bool
+    {
+        return $this->billing_mode === BillingMode::Chargeable
+            && $this->quote_response === QuoteResponse::Approved
+            && $this->quoteTotal() > 0
+            && $this->invoice === null;
     }
 
     /**

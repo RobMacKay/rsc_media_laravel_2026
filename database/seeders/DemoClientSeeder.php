@@ -9,6 +9,7 @@ use App\Enums\InvoiceStatus;
 use App\Enums\InvoiceType;
 use App\Enums\ProjectPhase;
 use App\Enums\ProposalStatus;
+use App\Enums\QuoteResponse;
 use App\Enums\TeamRole;
 use App\Enums\TicketPriority;
 use App\Enums\TicketStatus;
@@ -81,6 +82,7 @@ class DemoClientSeeder extends Seeder
         $tracker = $this->project($braemar, [
             'reference' => 'PRJ-004',
             'title' => 'Quote and job tracker',
+            'agreed_value' => 6600,
             'summary' => 'Internal tool replacing the shared spreadsheet.',
             'phase' => ProjectPhase::Build,
             'percent' => 65,
@@ -108,6 +110,7 @@ class DemoClientSeeder extends Seeder
         $booking = $this->project($glencoe, [
             'reference' => 'PRJ-003',
             'title' => 'Booking system phase 2',
+            'agreed_value' => 3600,
             'summary' => 'Deposits and confirmation emails.',
             'phase' => ProjectPhase::Scoping,
             'percent' => 15,
@@ -122,6 +125,7 @@ class DemoClientSeeder extends Seeder
         $rebuild = $this->project($fettes, [
             'reference' => 'PRJ-001',
             'title' => 'Site rebuild',
+            'agreed_value' => 7680,
             'summary' => 'New marketing site and booking hand-off.',
             'phase' => ProjectPhase::Testing,
             'percent' => 90,
@@ -235,6 +239,26 @@ class DemoClientSeeder extends Seeder
             'updated_at' => '2026-08-06 19:44:00',
         ]);
 
+        $this->ticket($fettes, $rebuild, $priya, [
+            'reference' => 'RSC-1042',
+            'title' => 'Add an online deposit to the booking form',
+            'description' => 'Patients want to pay a £25 holding deposit when they book a hygienist slot.',
+            'system' => 'fettesdental.co.uk',
+            'page_url' => '/book',
+            'type' => TicketType::Change,
+            'priority' => TicketPriority::Normal,
+            'status' => TicketStatus::Resolved,
+            'quoted_hours' => 4,
+            'quoted_rate' => 65,
+            'billing_mode' => BillingMode::Chargeable,
+            'quote_sent_at' => '2026-08-04 10:00:00',
+            'quote_response' => QuoteResponse::Approved,
+            'quote_responded_at' => '2026-08-05 09:15:00',
+            'resolved_at' => '2026-08-14 16:30:00',
+            'created_at' => '2026-08-03 13:20:00',
+            'updated_at' => '2026-08-14 16:30:00',
+        ]);
+
         Attachment::insert([
             $this->file($vatTicket, $ross, 'quote-vat-fix-estimate.pdf', 'PDF', 86_016, true),
             $this->file($vatTicket, $kirsty, 'vat-rate-config.png', 'PNG', 421_888, true),
@@ -244,6 +268,7 @@ class DemoClientSeeder extends Seeder
         $this->project($braemar, [
             'reference' => 'PRJ-002',
             'title' => 'Braemar Joinery website',
+            'agreed_value' => 5900,
             'summary' => 'Main site, timber calculator and enquiry forms.',
             'phase' => ProjectPhase::Live,
             'percent' => 100,

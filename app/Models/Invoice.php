@@ -18,6 +18,7 @@ use Illuminate\Support\Carbon;
  * @property string $number
  * @property int $team_id
  * @property int|null $project_id
+ * @property int|null $ticket_id
  * @property InvoiceType $type
  * @property string|null $note
  * @property int $amount
@@ -30,9 +31,10 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read Team $team
  * @property-read Project|null $project
+ * @property-read Ticket|null $ticket
  */
 #[Fillable([
-    'number', 'team_id', 'project_id', 'type', 'note', 'amount',
+    'number', 'team_id', 'project_id', 'ticket_id', 'type', 'note', 'amount',
     'vat_rate', 'issued_on', 'due_on', 'status', 'paid_at',
 ])]
 class Invoice extends Model
@@ -68,6 +70,16 @@ class Invoice extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /**
+     * Get the ticket this invoice was raised for, if it came from one.
+     *
+     * @return BelongsTo<Ticket, $this>
+     */
+    public function ticket(): BelongsTo
+    {
+        return $this->belongsTo(Ticket::class);
     }
 
     /**
