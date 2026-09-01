@@ -1,10 +1,12 @@
 <?php
 
+use App\Enums\Currency;
 use App\Models\Plan;
 use App\Models\StudioSetting;
 use App\Models\Team;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -96,11 +98,35 @@ class extends Component {
         $planHours = $this->selectedClient?->plan?->hours_per_month ?? 0;
 
         return [
-            ['label' => 'hour_rate', 'value' => '£'.number_format((float) $hour), 'source' => $hourSource],
-            ['label' => 'day_rate', 'value' => '£'.number_format((float) $day), 'source' => $daySource],
+            ['label' => 'currency', 'value' => $this->clientCurrency->label(), 'source' => 'set here'],
+            ['label' => 'hour_rate', 'value' => $this->clientCurrency->format((float) $hour), 'source' => $hourSource],
+            ['label' => 'day_rate', 'value' => $this->clientCurrency->format((float) $day), 'source' => $daySource],
             ['label' => 'support_hours', 'value' => rtrim(rtrim(number_format((float) (filled($hours) ? $hours : $planHours), 1), '0'), '.').'h', 'source' => filled($hours) ? 'set here' : 'from plan'],
             ['label' => 'payment_terms', 'value' => $terms.' days', 'source' => $termsSource],
         ];
+    }
+
+    /**
+     * Get the rates this client is falling back to the studio default for
+     * while being billed in another currency.
+     *
+     * The studio holds no exchange rates, so a default of 460 is charged as
+     * 460 of the client's currency. That is a decision to make deliberately,
+     * not to discover on an invoice.
+     *
+     * @return array<int, string>
+     */
+    #[Computed]
+    public function unconvertedRates(): array
+    {
+        if ($this->clientId === null || $this->clientCurrency === Currency::Base) {
+            return [];
+        }
+
+        return collect(['hour_rate', 'day_rate'])
+            ->reject(fn (string $key) => filled($this->client[$key] ?? null))
+            ->values()
+            ->all();
     }
 
     /**
@@ -113,6 +139,7 @@ class extends Component {
         $team = $this->clients->firstWhere('id', $clientId);
 
         $this->client = [
+            'currency' => $team?->currency->value,
             'hour_rate' => $team?->hour_rate,
             'day_rate' => $team?->day_rate,
             'support_hours' => $team?->support_hours,
@@ -121,7 +148,26 @@ class extends Component {
             'billing_email' => $team?->billing_email,
         ];
 
-        unset($this->selectedClient, $this->effective);
+        unset($this->selectedClient, $this->effective, $this->clientCurrency, $this->unconvertedRates);
+    }
+
+    /**
+     * Set the currency this client is billed in.
+     */
+    public function chooseCurrency(string $currency): void
+    {
+        $this->client['currency'] = Currency::from($currency)->value;
+
+        unset($this->effective, $this->clientCurrency, $this->unconvertedRates);
+    }
+
+    /**
+     * Get the currency the selected client is billed in.
+     */
+    #[Computed]
+    public function clientCurrency(): Currency
+    {
+        return Currency::tryFrom((string) ($this->client['currency'] ?? '')) ?? Currency::Base;
     }
 
     /**
@@ -153,6 +199,7 @@ class extends Component {
             'studio.sort_code' => __('sort code'),
             'studio.account_number' => __('account number'),
             'studio.reference_format' => __('payment reference format'),
+            'client.currency' => __('currency for this client'),
             'client.hour_rate' => __('hourly rate for this client'),
             'client.day_rate' => __('day rate for this client'),
             'client.support_hours' => __('support hours for this client'),
@@ -194,6 +241,7 @@ class extends Component {
             'plans.*.hours_per_month' => ['required', 'numeric', 'min:0'],
             'plans.*.response_time' => ['required', 'string', 'max:255'],
             'plans.*.features' => ['nullable', 'string'],
+            'client.currency' => ['nullable', Rule::enum(Currency::class)],
             'client.hour_rate' => ['nullable', 'integer', 'min:0'],
             'client.day_rate' => ['nullable', 'integer', 'min:0'],
             'client.support_hours' => ['nullable', 'numeric', 'min:0'],
@@ -220,9 +268,15 @@ class extends Component {
             ]);
         }
 
-        $this->selectedClient?->update($validated['client']);
+        $client = $validated['client'];
 
-        unset($this->clients, $this->selectedClient, $this->effective);
+        if (blank($client['currency'] ?? null)) {
+            unset($client['currency']);
+        }
+
+        $this->selectedClient?->update($client);
+
+        unset($this->clients, $this->selectedClient, $this->effective, $this->clientCurrency, $this->unconvertedRates);
 
         Flux::toast(variant: 'success', text: __('Settings saved.'));
     }
@@ -275,15 +329,15 @@ class extends Component {
             <div class="mb-5 flex flex-wrap items-center gap-3 font-mono text-[11px] tracking-[0.08em] text-muted">
                 <span>default_rates</span>
                 <span class="ms-auto text-brand">
-                    {{ __('a day at the hourly rate is £:total', ['total' => number_format(round(($studio['hour_rate'] ?? 0) * ($studio['day_length'] ?? 0)))]) }}
+                    {{ __('a day at the hourly rate is :total', ['total' => Currency::Base->format(round(($studio['hour_rate'] ?? 0) * ($studio['day_length'] ?? 0)))]) }}
                 </span>
             </div>
 
             <div class="grid gap-[18px] [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]">
-                <x-rsc.field label="hour_rate_£" name="studio.hour_rate">
+                <x-rsc.field label="hour_rate_{{ Currency::Base->symbol() }}" name="studio.hour_rate">
                     <x-rsc.input type="number" min="0" step="5" wire:model.live="studio.hour_rate" class="!py-3" />
                 </x-rsc.field>
-                <x-rsc.field label="day_rate_£" name="studio.day_rate">
+                <x-rsc.field label="day_rate_{{ Currency::Base->symbol() }}" name="studio.day_rate">
                     <x-rsc.input type="number" min="0" step="10" wire:model="studio.day_rate" class="!py-3" />
                 </x-rsc.field>
                 <x-rsc.field label="hours_in_a_day" name="studio.day_length">
@@ -371,7 +425,7 @@ class extends Component {
                             <x-rsc.field label="{{ $plan['slug'] }}_name" name="plans.{{ $index }}.name">
                                 <x-rsc.input wire:model="plans.{{ $index }}.name" class="!py-[11px] font-display font-bold" />
                             </x-rsc.field>
-                            <x-rsc.field label="price_pm_£" name="plans.{{ $index }}.price">
+                            <x-rsc.field label="price_pm_{{ Currency::Base->symbol() }}" name="plans.{{ $index }}.price">
                                 <x-rsc.input type="number" min="0" step="5" wire:model.live="plans.{{ $index }}.price" class="!py-[11px]" />
                             </x-rsc.field>
                             <x-rsc.field label="hours_pm" name="plans.{{ $index }}.hours_per_month">
@@ -404,7 +458,7 @@ class extends Component {
                             </label>
                             <span class="ms-auto font-mono text-[11px] text-muted">
                                 {{ ($plan['hours_per_month'] ?? 0) > 0
-                                    ? __('£:rate an hour once used up', ['rate' => number_format(round($plan['price'] / max($plan['hours_per_month'], 1)))])
+                                    ? __(':rate an hour once used up', ['rate' => Currency::Base->format(round($plan['price'] / max($plan['hours_per_month'], 1)))])
                                     : __('no hours included') }}
                             </span>
                         </div>
@@ -427,11 +481,29 @@ class extends Component {
                 @endforeach
             </div>
 
+            <div class="mb-[18px]">
+                <div class="mb-2.5 font-mono text-[11px] tracking-[0.08em] text-muted">currency</div>
+                <div class="flex flex-wrap gap-2">
+                    @foreach (Currency::cases() as $option)
+                        <x-rsc.chip wire:click="chooseCurrency('{{ $option->value }}')"
+                                    :active="$this->clientCurrency === $option"
+                                    :disabled="$clientId === null"
+                                    class="!text-[13px] !font-sans disabled:cursor-not-allowed disabled:opacity-45">
+                            {{ $option->label() }}
+                        </x-rsc.chip>
+                    @endforeach
+                </div>
+                <p class="m-0 mt-2.5 text-[13px] text-muted">
+                    {{ __('Everything this client is quoted and invoiced is in this currency. Invoices already raised keep the currency they were raised in.') }}
+                </p>
+                @error('client.currency') <p class="m-0 mt-2 text-[13px] text-warm">{{ $message }}</p> @enderror
+            </div>
+
             <div class="grid gap-[18px] [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]">
-                <x-rsc.field label="hour_rate_£" name="client.hour_rate">
+                <x-rsc.field label="hour_rate_{{ $this->clientCurrency->symbol() }}" name="client.hour_rate">
                     <x-rsc.input type="number" min="0" step="5" wire:model.live="client.hour_rate" placeholder="{{ $studio['hour_rate'] ?? '' }}" class="!py-3" />
                 </x-rsc.field>
-                <x-rsc.field label="day_rate_£" name="client.day_rate">
+                <x-rsc.field label="day_rate_{{ $this->clientCurrency->symbol() }}" name="client.day_rate">
                     <x-rsc.input type="number" min="0" step="10" wire:model.live="client.day_rate" placeholder="{{ $studio['day_rate'] ?? '' }}" class="!py-3" />
                 </x-rsc.field>
                 <x-rsc.field label="support_hours_pm" name="client.support_hours">
@@ -466,6 +538,21 @@ class extends Component {
                         </span>
                     @endforeach
                 </div>
+
+                @if ($this->unconvertedRates)
+                    <p class="m-0 mt-4 border-t border-line pt-4 text-[13px] text-warm">
+                        {{ trans_choice(
+                            '{1}:rates is the studio default, and nothing converts it — :amount is charged as :converted. Set one here if that is not what you mean.'
+                            .'|[2,*]:rates are the studio defaults, and nothing converts them — :amount is charged as :converted. Set them here if that is not what you mean.',
+                            count($this->unconvertedRates),
+                            [
+                            'rates' => str(collect($this->unconvertedRates)->map(fn (string $rate) => str_replace('_', ' ', $rate))->join(' and '))->ucfirst()->toString(),
+                            'amount' => Currency::Base->format((float) ($studio[$this->unconvertedRates[0]] ?? 0)),
+                            'converted' => $this->clientCurrency->format((float) ($studio[$this->unconvertedRates[0]] ?? 0)),
+                            ],
+                        ) }}
+                    </p>
+                @endif
             </div>
         </x-rsc.panel>
 

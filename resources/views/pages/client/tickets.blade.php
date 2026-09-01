@@ -463,11 +463,11 @@ class extends Component {
                         </div>
 
                         <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                            <span class="font-display text-[clamp(26px,3vw,34px)] font-extrabold tracking-[-0.035em]">£{{ number_format($ticket->quoteTotal()) }}</span>
+                            <span class="font-display text-[clamp(26px,3vw,34px)] font-extrabold tracking-[-0.035em]">{{ $ticket->team->money($ticket->quoteTotal()) }}</span>
                             <span class="text-[13px] text-muted">
-                                {{ __(':hours hours at £:rate', [
+                                {{ __(':hours hours at :rate', [
                                     'hours' => rtrim(rtrim(number_format((float) $ticket->quoted_hours, 2), '0'), '.'),
-                                    'rate' => number_format((int) $ticket->quoted_rate),
+                                    'rate' => $ticket->team->money((int) $ticket->quoted_rate),
                                 ]) }}
                             </span>
                             <span class="w-full text-xs text-muted">{{ __('Excluding VAT. Nothing starts until you approve it.') }}</span>

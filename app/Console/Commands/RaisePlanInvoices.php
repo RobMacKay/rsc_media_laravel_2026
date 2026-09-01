@@ -40,7 +40,7 @@ class RaisePlanInvoices extends Command
         if ($this->option('pretend')) {
             $this->table(
                 ['Client', 'Plan', 'Amount'],
-                $due->map(fn ($team) => [$team->name, $team->plan->name, '£'.number_format($team->plan->price)]),
+                $due->map(fn ($team) => [$team->name, $team->plan->name, $team->money($team->plan->price)]),
             );
 
             return self::SUCCESS;
@@ -53,7 +53,7 @@ class RaisePlanInvoices extends Command
             $raised->map(fn ($invoice) => [
                 $invoice->number,
                 $invoice->team->name,
-                '£'.number_format($invoice->amount),
+                $invoice->money($invoice->amount),
                 $invoice->due_on->format('j M Y'),
             ]),
         );

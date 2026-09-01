@@ -266,7 +266,9 @@ class extends Component {
                      billing: '{{ $ticket->billing_mode->value }}',
                      priority: '{{ $ticket->priority->value }}',
                      target: '{{ $ticket->target_on?->format('Y-m-d') }}',
-                     get total() { return '£' + Math.round(this.hours * this.rate).toLocaleString('en-GB'); },
+                     symbol: @js($ticket->team->currency->symbol()),
+                     suffix: @js($ticket->team->currency->suffix()),
+                     get total() { return this.symbol + Math.round(this.hours * this.rate).toLocaleString('en-GB') + this.suffix; },
                  }">
                 <button type="button" wire:click="closeDetail"
                         class="flex cursor-pointer items-center gap-2 self-start font-mono text-[11px] text-muted transition-colors hover:text-brand lg:hidden">

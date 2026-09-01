@@ -12,6 +12,7 @@ use App\Models\Project;
 use App\Models\StudioSetting;
 use App\Models\Team;
 use App\Models\Ticket;
+use App\Support\Money;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
 use Carbon\CarbonInterface;
@@ -89,7 +90,7 @@ class extends Component {
         $draft = $this->allInvoices->where('status', InvoiceStatus::Draft);
         $paid = $this->allInvoices->where('status', InvoiceStatus::Paid);
 
-        $sum = fn (Collection $rows) => '£'.number_format(round($rows->sum(fn (Invoice $i) => $i->total())));
+        $sum = fn (Collection $rows) => Money::total($rows, fn (Invoice $i) => $i->total(), fn (Invoice $i) => $i->currency);
 
         return [
             [
@@ -118,7 +119,7 @@ class extends Component {
     /**
      * Get what has been collected this month against what was invoiced.
      *
-     * @return array{taken: float, expected: float, percent: float}
+     * @return array{taken: string, expected: string, percent: float}
      */
     #[Computed]
     public function collected(): array
@@ -129,8 +130,8 @@ class extends Component {
         $taken = $thisMonth->where('status', InvoiceStatus::Paid)->sum(fn (Invoice $i) => $i->total());
 
         return [
-            'taken' => $taken,
-            'expected' => $expected,
+            'taken' => Money::total($thisMonth->where('status', InvoiceStatus::Paid), fn (Invoice $i) => $i->total(), fn (Invoice $i) => $i->currency),
+            'expected' => Money::total($thisMonth, fn (Invoice $i) => $i->total(), fn (Invoice $i) => $i->currency),
             'percent' => $expected > 0 ? min(100, $taken / $expected * 100) : 0,
         ];
     }
@@ -139,6 +140,11 @@ class extends Component {
      * Get the last six months of settled invoices, for the bar chart.
      *
      * @return array<int, array{label: string, height: string, fill: string}>
+     *
+     * The bars are relative heights with no figures on them, so amounts in
+     * different currencies are added together as plain numbers. The studio
+     * holds no exchange rates, and inventing one to draw a bar would be worse
+     * than the small distortion.
      */
     #[Computed]
     public function months(): array
@@ -161,20 +167,21 @@ class extends Component {
     /**
      * Get the recurring monthly revenue from clients on a plan.
      *
-     * @return array{total: int, clients: int, mix: array<int, array{name: string, count: int, total: string}>}
+     * @return array{total: string, clients: int, mix: array<int, array{name: string, count: int, total: string}>}
      */
     #[Computed]
     public function recurring(): array
     {
-        $plans = Plan::query()->offered()->withCount('teams')->get();
+        $plans = Plan::query()->offered()->with('teams')->get();
+        $onAPlan = $plans->flatMap(fn (Plan $plan) => $plan->teams);
 
         return [
-            'total' => (int) $plans->sum(fn (Plan $plan) => $plan->price * $plan->teams_count),
-            'clients' => (int) $plans->sum('teams_count'),
+            'total' => Money::total($onAPlan, fn (Team $team) => $team->plan->price, fn (Team $team) => $team->currency),
+            'clients' => $onAPlan->count(),
             'mix' => $plans->map(fn (Plan $plan) => [
                 'name' => $plan->name,
-                'count' => $plan->teams_count,
-                'total' => '£'.number_format($plan->price * $plan->teams_count),
+                'count' => $plan->teams->count(),
+                'total' => Money::total($plan->teams, fn (Team $team) => $plan->price, fn (Team $team) => $team->currency),
             ])->all(),
         ];
     }
@@ -328,7 +335,7 @@ class extends Component {
 
         Flux::toast(variant: 'success', text: __('Raised :number for :amount.', [
             'number' => $invoice->number,
-            'amount' => '£'.number_format($invoice->amount),
+            'amount' => $invoice->money($invoice->amount),
         ]));
     }
 
@@ -347,7 +354,7 @@ class extends Component {
 
         Flux::toast(variant: 'success', text: __('Raised :number for :amount.', [
             'number' => $invoice->number,
-            'amount' => '£'.number_format($invoice->amount),
+            'amount' => $invoice->money($invoice->amount),
         ]));
     }
 
@@ -428,7 +435,7 @@ class extends Component {
 }; ?>
 
 @php
-    $money = fn (float $value) => '£'.number_format(round($value));
+    $currency = $this->clients->firstWhere('id', $teamId)?->currency ?? \App\Enums\Currency::Base;
 @endphp
 
 <div>
@@ -463,8 +470,8 @@ class extends Component {
                 <span>{{ round($this->collected['percent']) }}%</span>
             </div>
             <div class="flex items-baseline gap-2.5">
-                <span class="font-display text-[clamp(28px,3.2vw,40px)] font-extrabold leading-none tracking-[-0.035em]">{{ $money($this->collected['taken']) }}</span>
-                <span class="text-[13px] text-muted">{{ __('of :total expected', ['total' => $money($this->collected['expected'])]) }}</span>
+                <span class="font-display text-[clamp(28px,3.2vw,40px)] font-extrabold leading-none tracking-[-0.035em]">{{ $this->collected['taken'] }}</span>
+                <span class="text-[13px] text-muted">{{ __('of :total expected', ['total' => $this->collected['expected']]) }}</span>
             </div>
             <x-rsc.meter :percent="$this->collected['percent']" class="mt-4" />
 
@@ -486,7 +493,7 @@ class extends Component {
         <x-rsc.panel>
             <div class="mb-[18px] font-mono text-[11px] tracking-[0.08em] text-muted">recurring_from_plans</div>
             <div class="flex items-baseline gap-2.5">
-                <span class="font-display text-[clamp(28px,3.2vw,40px)] font-extrabold leading-none tracking-[-0.035em]">£{{ number_format($this->recurring['total']) }}</span>
+                <span class="font-display text-[clamp(28px,3.2vw,40px)] font-extrabold leading-none tracking-[-0.035em]">{{ $this->recurring['total'] }}</span>
                 <span class="text-[13px] text-muted">{{ __('a month across :count clients', ['count' => $this->recurring['clients']]) }}</span>
             </div>
 
@@ -556,7 +563,7 @@ class extends Component {
 
                         <div class="flex flex-wrap items-center justify-end gap-3">
                             <div class="text-end">
-                                <div class="font-display text-[19px] font-bold tracking-[-0.02em]">{{ $money($team->plan->price) }}</div>
+                                <div class="font-display text-[19px] font-bold tracking-[-0.02em]">{{ $team->money($team->plan->price) }}</div>
                                 <div class="font-mono text-[10px] text-muted">{{ __('a month') }}</div>
                             </div>
                             <x-rsc.button variant="outline" wire:click="raisePlan({{ $team->id }})" class="!px-5 !py-2.5 !text-sm">
@@ -577,15 +584,15 @@ class extends Component {
                             <div class="font-display text-base font-bold tracking-[-0.015em]">{{ $project->title }}</div>
                             <div class="mt-1 text-[13px] text-muted">
                                 {{ __('Agreed :agreed, invoiced :invoiced', [
-                                    'agreed' => $money($project->agreed_value),
-                                    'invoiced' => $money($project->contractInvoiced()),
+                                    'agreed' => $project->team->money($project->agreed_value),
+                                    'invoiced' => $project->team->money($project->contractInvoiced()),
                                 ]) }}
                             </div>
                         </div>
 
                         <div class="flex flex-wrap items-center justify-end gap-3">
                             <div class="text-end">
-                                <div class="font-display text-[19px] font-bold tracking-[-0.02em]">{{ $money($project->balanceToInvoice()) }}</div>
+                                <div class="font-display text-[19px] font-bold tracking-[-0.02em]">{{ $project->team->money($project->balanceToInvoice()) }}</div>
                                 <div class="font-mono text-[10px] text-muted">{{ __('balance') }}</div>
                             </div>
                             <x-rsc.button wire:click="raiseFinal({{ $project->id }})"
@@ -606,9 +613,9 @@ class extends Component {
                             </div>
                             <div class="font-display text-base font-bold tracking-[-0.015em]">{{ $ticket->title }}</div>
                             <div class="mt-1 text-[13px] text-muted">
-                                {{ __(':hours hours at £:rate, approved :when', [
+                                {{ __(':hours hours at :rate, approved :when', [
                                     'hours' => rtrim(rtrim(number_format((float) $ticket->quoted_hours, 2), '0'), '.'),
-                                    'rate' => number_format((int) $ticket->quoted_rate),
+                                    'rate' => $ticket->team->money((int) $ticket->quoted_rate),
                                     'when' => $ticket->quote_responded_at?->format('j M') ?? '—',
                                 ]) }}
                             </div>
@@ -616,7 +623,7 @@ class extends Component {
 
                         <div class="flex flex-wrap items-center justify-end gap-3">
                             <div class="text-end">
-                                <div class="font-display text-[19px] font-bold tracking-[-0.02em]">{{ $money($ticket->quoteTotal()) }}</div>
+                                <div class="font-display text-[19px] font-bold tracking-[-0.02em]">{{ $ticket->team->money($ticket->quoteTotal()) }}</div>
                                 <div class="font-mono text-[10px] text-muted">{{ __('quoted') }}</div>
                             </div>
                             <x-rsc.button wire:click="raiseForTicket({{ $ticket->id }})"
@@ -679,7 +686,7 @@ class extends Component {
                             </x-rsc.select>
                         </x-rsc.field>
 
-                        <x-rsc.field label="amount_ex_vat_£" name="amount">
+                        <x-rsc.field label="amount_ex_vat_{{ $currency->symbol() }}" name="amount">
                             <x-rsc.input type="number" min="0" step="10" wire:model="amount" class="!py-3" />
                         </x-rsc.field>
                     </div>
@@ -695,9 +702,9 @@ class extends Component {
                             $terms = $client?->effectivePaymentTerms($this->settings) ?? $this->settings->payment_terms_days;
                         @endphp
                         @foreach ([
-                            ['ex_vat', '£'.number_format($amount)],
-                            ['vat_at_'.rtrim(rtrim(number_format($vat, 1), '0'), '.').'%', '£'.number_format(round($amount * $vat / 100))],
-                            ['total', '£'.number_format(round($amount * (1 + $vat / 100)))],
+                            ['ex_vat', $currency->format($amount)],
+                            ['vat_at_'.rtrim(rtrim(number_format($vat, 1), '0'), '.').'%', $currency->format(round($amount * $vat / 100))],
+                            ['total', $currency->format(round($amount * (1 + $vat / 100)))],
                             ['due', now()->addDays($terms)->format('j M')],
                         ] as [$label, $value])
                             <span class="flex flex-col gap-1.5">
@@ -739,7 +746,7 @@ class extends Component {
                         </span>
                         <span class="font-mono text-[11px] {{ $invoice->type === \App\Enums\InvoiceType::Plan ? 'text-brand' : 'text-muted' }}">{{ $invoice->type->label() }}</span>
                         <span class="text-[13px] {{ $invoice->status === \App\Enums\InvoiceStatus::Overdue ? 'text-warm' : 'text-muted' }}">{{ $invoice->due_on->format('j M') }}</span>
-                        <span class="font-display text-[15px] font-bold">{{ $money($invoice->total()) }}</span>
+                        <span class="font-display text-[15px] font-bold">{{ $invoice->money($invoice->total()) }}</span>
                         <span class="flex items-center gap-2.5">
                             <x-rsc.pill :tone="$invoice->status->tone()">{{ str($invoice->status->label())->lower() }}</x-rsc.pill>
                             @if ($invoice->status->isOutstanding())
@@ -755,7 +762,7 @@ class extends Component {
 
         <div class="flex flex-wrap gap-x-6 gap-y-2.5 px-[22px] py-4 font-mono text-[11px] text-muted">
             <span>{{ __(':shown of :total invoices', ['shown' => $this->invoices->count(), 'total' => $this->allInvoices->count()]) }}</span>
-            <span class="ms-auto">{{ __(':total shown, inc VAT', ['total' => $money($this->invoices->sum(fn ($invoice) => $invoice->total()))]) }}</span>
+            <span class="ms-auto">{{ __(':total shown, inc VAT', ['total' => Money::total($this->invoices, fn (Invoice $invoice) => $invoice->total(), fn (Invoice $invoice) => $invoice->currency)]) }}</span>
         </div>
     </div>
 </div>

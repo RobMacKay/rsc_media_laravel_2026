@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Currency;
 use App\Enums\InvoiceStatus;
 use App\Enums\InvoiceType;
 use Database\Factories\InvoiceFactory;
@@ -23,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $note
  * @property int $amount
  * @property float $vat_rate
+ * @property Currency $currency
  * @property Carbon $issued_on
  * @property Carbon $due_on
  * @property InvoiceStatus $status
@@ -35,12 +37,21 @@ use Illuminate\Support\Carbon;
  */
 #[Fillable([
     'number', 'team_id', 'project_id', 'ticket_id', 'type', 'note', 'amount',
-    'vat_rate', 'issued_on', 'due_on', 'status', 'paid_at',
+    'vat_rate', 'currency', 'issued_on', 'due_on', 'status', 'paid_at',
 ])]
 class Invoice extends Model
 {
     /** @use HasFactory<InvoiceFactory> */
     use HasFactory;
+
+    /**
+     * The model's default values.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'currency' => 'GBP',
+    ];
 
     /**
      * Allocate the next sequential invoice number, e.g. RSC-0148.
@@ -110,6 +121,14 @@ class Invoice extends Model
     }
 
     /**
+     * Format an amount in the currency this invoice was raised in.
+     */
+    public function money(float $amount, int $decimals = 0): string
+    {
+        return $this->currency->format($amount, $decimals);
+    }
+
+    /**
      * Get the reference the client should quote when they pay, built from the
      * format the studio set in its settings.
      */
@@ -141,6 +160,7 @@ class Invoice extends Model
             'type' => InvoiceType::class,
             'status' => InvoiceStatus::class,
             'vat_rate' => 'float',
+            'currency' => Currency::class,
             'issued_on' => 'date',
             'due_on' => 'date',
             'paid_at' => 'datetime',

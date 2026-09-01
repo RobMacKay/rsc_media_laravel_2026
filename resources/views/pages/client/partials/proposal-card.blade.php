@@ -54,7 +54,7 @@
             <div class="flex flex-col gap-3.5">
                 <div class="font-mono text-[11px] tracking-[0.1em] text-muted">price</div>
                 <div class="font-display text-[clamp(30px,3.6vw,44px)] font-extrabold leading-none tracking-[-0.04em]">
-                    £{{ number_format($proposal->price) }} + VAT
+                    {{ $proposal->team->money($proposal->price) }} + VAT
                 </div>
                 <div class="text-[13px] text-muted">
                     {{ __('Fixed price. :weeks weeks from sign-off.', ['weeks' => $proposal->weeks]) }}
@@ -63,11 +63,11 @@
                 <div class="flex flex-col gap-2.5 border-t border-line pt-3.5 text-[13px] text-muted">
                     <div class="flex justify-between gap-3.5">
                         <span>{{ __('Deposit on sign-off') }}</span>
-                        <span class="text-body">£{{ number_format($proposal->deposit()) }} ({{ $proposal->deposit_percent }}%)</span>
+                        <span class="text-body">{{ $proposal->team->money($proposal->deposit()) }} ({{ $proposal->deposit_percent }}%)</span>
                     </div>
                     <div class="flex justify-between gap-3.5">
                         <span>{{ __('Balance on go live') }}</span>
-                        <span class="text-body">£{{ number_format($proposal->balance()) }}</span>
+                        <span class="text-body">{{ $proposal->team->money($proposal->balance()) }}</span>
                     </div>
                     <div class="flex justify-between gap-3.5">
                         <span>{{ __('Payment terms') }}</span>
