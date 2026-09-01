@@ -5,6 +5,7 @@ use App\Enums\InvoiceType;
 use App\Enums\QuoteResponse;
 use App\Enums\TicketStatus;
 use App\Models\Invoice;
+use App\Models\Plan;
 use App\Models\Project;
 use App\Models\StudioSetting;
 use App\Models\Team;
@@ -223,4 +224,118 @@ test('the billing queue is closed to clients', function () {
     $this->actingAs(User::factory()->create())
         ->get(route('admin.invoices'))
         ->assertForbidden();
+});
+
+/**
+ * Put a client on a plan at the given monthly price.
+ */
+function clientOnPlan(int $price = 180, string $name = 'Care & Support'): Team
+{
+    return Team::factory()->create([
+        'plan_id' => Plan::factory()->create(['name' => $name, 'price' => $price])->id,
+    ]);
+}
+
+test('the scheduled run raises a plan invoice for every client on a plan', function () {
+    $braemar = clientOnPlan(180);
+    $glencoe = clientOnPlan(180);
+    $fettes = clientOnPlan(75, 'Essential');
+
+    $this->artisan('invoices:raise-plans')->assertSuccessful();
+
+    expect(Invoice::where('type', InvoiceType::Plan)->count())->toBe(3)
+        ->and((int) $braemar->invoices()->sum('amount'))->toBe(180)
+        ->and((int) $fettes->invoices()->sum('amount'))->toBe(75);
+
+    $note = $glencoe->invoices()->sole()->note;
+
+    expect($note)->toContain('Care & Support')->toContain(now()->format('F'));
+});
+
+test('the scheduled run does not bill the same month twice', function () {
+    clientOnPlan();
+
+    $this->artisan('invoices:raise-plans')->assertSuccessful();
+    $this->artisan('invoices:raise-plans')->assertSuccessful();
+
+    expect(Invoice::count())->toBe(1);
+});
+
+test('raising by hand and the scheduled run do not double up', function () {
+    $team = clientOnPlan();
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.invoices')
+        ->call('raisePlan', $team->id)
+        ->assertHasNoErrors();
+
+    expect(Invoice::count())->toBe(1);
+
+    // The schedule still fires on the 1st, and must find nothing left to do.
+    $this->artisan('invoices:raise-plans')->assertSuccessful();
+
+    expect(Invoice::count())->toBe(1);
+});
+
+test('the studio can send every plan invoice early from the screen', function () {
+    clientOnPlan();
+    clientOnPlan(75, 'Essential');
+
+    $component = Livewire::actingAs(User::factory()->admin()->create())->test('pages::admin.invoices');
+
+    expect($component->instance()->plansToBill)->toHaveCount(2);
+
+    $component->call('raiseAllPlans')->assertHasNoErrors();
+
+    expect(Invoice::where('type', InvoiceType::Plan)->count())->toBe(2)
+        ->and($component->instance()->plansToBill)->toHaveCount(0);
+
+    $component->call('raiseAllPlans')->assertStatus(422);
+});
+
+test('a client with no plan is never billed a retainer', function () {
+    Team::factory()->create(['plan_id' => null]);
+
+    $this->artisan('invoices:raise-plans')->assertSuccessful();
+
+    expect(Invoice::count())->toBe(0);
+});
+
+test('a free plan raises nothing', function () {
+    clientOnPlan(0, 'Free');
+
+    $this->artisan('invoices:raise-plans')->assertSuccessful();
+
+    expect(Invoice::count())->toBe(0);
+});
+
+test('next month is due again once the month rolls over', function () {
+    $team = clientOnPlan();
+
+    $this->artisan('invoices:raise-plans')->assertSuccessful();
+    expect(Invoice::count())->toBe(1);
+
+    $this->travel(1)->months();
+
+    $this->artisan('invoices:raise-plans')->assertSuccessful();
+
+    expect(Invoice::count())->toBe(2)
+        ->and((int) $team->invoices()->sum('amount'))->toBe(360);
+});
+
+test('pretend lists what is due without raising it', function () {
+    clientOnPlan();
+
+    $this->artisan('invoices:raise-plans --pretend')->assertSuccessful();
+
+    expect(Invoice::count())->toBe(0);
+});
+
+test('the plan invoice follows the client\'s own payment terms', function () {
+    $team = clientOnPlan();
+    $team->update(['payment_terms_days' => 14]);
+
+    $this->artisan('invoices:raise-plans')->assertSuccessful();
+
+    expect(Invoice::sole()->due_on->toDateString())->toBe(now()->addDays(14)->toDateString());
 });
