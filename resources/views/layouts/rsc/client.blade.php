@@ -9,6 +9,7 @@
         ['label' => 'projects', 'route' => 'client.projects'],
         ['label' => 'team', 'route' => 'client.team'],
         ['label' => 'plan', 'route' => 'client.plan'],
+        ['label' => 'health', 'route' => 'client.health'],
     ];
 
     if ($access?->canSeeBilling()) {

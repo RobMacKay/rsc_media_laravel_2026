@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\CheckSites;
 use App\Console\Commands\RaisePlanInvoices;
 use App\Models\TeamInvitation;
 use Illuminate\Support\Facades\Schedule;
@@ -18,3 +19,10 @@ Schedule::command(RaisePlanInvoices::class)
     ->monthlyOn(1, '07:00')
     ->withoutOverlapping()
     ->description('Raise monthly support plan invoices');
+
+// Site health. Every fifteen minutes is often enough to catch an outage while
+// it still matters, without hammering a client's site.
+Schedule::command(CheckSites::class)
+    ->everyFifteenMinutes()
+    ->withoutOverlapping()
+    ->description('Check monitored sites');

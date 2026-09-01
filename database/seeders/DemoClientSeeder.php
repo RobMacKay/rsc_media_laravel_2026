@@ -10,6 +10,7 @@ use App\Enums\InvoiceType;
 use App\Enums\ProjectPhase;
 use App\Enums\ProposalStatus;
 use App\Enums\QuoteResponse;
+use App\Enums\SiteStatus;
 use App\Enums\TeamRole;
 use App\Enums\TicketPriority;
 use App\Enums\TicketStatus;
@@ -21,6 +22,7 @@ use App\Models\Plan;
 use App\Models\Project;
 use App\Models\ProjectUpdate;
 use App\Models\Proposal;
+use App\Models\SiteCheck;
 use App\Models\Team;
 use App\Models\Ticket;
 use App\Models\TicketComment;
@@ -265,6 +267,21 @@ class DemoClientSeeder extends Seeder
             'updated_at' => '2026-08-14 16:30:00',
         ]);
 
+        $this->sitesFor($braemar, [
+            ['Main website', 'braemarjoinery.co.uk', 'up', 74],
+            ['Quote and job tracker', 'quotes.braemarjoinery.co.uk', 'up', 12],
+            ['Trade counter stock', 'stock.braemarjoinery.co.uk', 'down', 40],
+        ]);
+
+        $this->sitesFor($glencoe, [
+            ['Main website', 'glencoecabins.co.uk', 'up', 88],
+            ['Booking system', 'book.glencoecabins.co.uk', 'up', 5],
+        ]);
+
+        $this->sitesFor($fettes, [
+            ['Practice website', 'fettesdental.co.uk', 'up', 120],
+        ]);
+
         Attachment::insert([
             $this->file($vatTicket, $ross, 'quote-vat-fix-estimate.pdf', 'PDF', true),
             $this->file($vatTicket, $kirsty, 'vat-rate-config.png', 'PNG', true),
@@ -303,6 +320,63 @@ class DemoClientSeeder extends Seeder
         $this->updates($braemar, $tracker);
 
         $this->invoices($braemar, $glencoe, $fettes, $tracker, $booking, $rebuild, $carePlan);
+    }
+
+    /**
+     * Give a client some sites to watch, with a fortnight of check history so
+     * the uptime figures and the downloadable log are not empty.
+     *
+     * @param  array<int, array{0: string, 1: string, 2: string, 3: int}>  $sites
+     */
+    private function sitesFor(Team $team, array $sites): void
+    {
+        foreach ($sites as [$name, $host, $state, $certificateDays]) {
+            $isUp = $state === 'up';
+
+            $site = $team->sites()->create([
+                'name' => $name,
+                'url' => 'https://'.$host,
+                'host' => $host,
+                'status' => $isUp ? SiteStatus::Up : SiteStatus::Down,
+                'http_status' => $isUp ? 200 : 503,
+                'response_ms' => $isUp ? random_int(120, 720) : null,
+                'ssl_valid' => true,
+                'ssl_expires_at' => now()->addDays($certificateDays),
+                'ssl_issuer' => "Let's Encrypt",
+                'last_error' => $isUp ? null : 'The site answered with 503.',
+                'last_checked_at' => now()->subMinutes(4),
+                'last_up_at' => $isUp ? now()->subMinutes(4) : now()->subHours(3),
+                'last_down_at' => $isUp ? now()->subDays(9) : now()->subMinutes(4),
+                'consecutive_failures' => $isUp ? 0 : 12,
+                'down_notified_at' => $isUp ? null : now()->subHours(3),
+            ]);
+
+            $rows = [];
+
+            // Every fifteen minutes for a fortnight, with the odd blip so the
+            // uptime percentage is a real number rather than a flat 100%.
+            for ($minutes = 14 * 24 * 60; $minutes >= 0; $minutes -= 15) {
+                $at = now()->subMinutes($minutes);
+                $failed = (! $isUp && $minutes < 180) || random_int(1, 260) === 1;
+
+                $rows[] = [
+                    'site_id' => $site->id,
+                    'checked_at' => $at,
+                    'status' => $failed ? SiteStatus::Down->value : SiteStatus::Up->value,
+                    'http_status' => $failed ? 503 : 200,
+                    'response_ms' => $failed ? null : random_int(110, 900),
+                    'ssl_valid' => true,
+                    'ssl_expires_at' => now()->addDays($certificateDays),
+                    'error' => $failed ? 'The site answered with 503.' : null,
+                    'created_at' => $at,
+                    'updated_at' => $at,
+                ];
+            }
+
+            foreach (array_chunk($rows, 500) as $chunk) {
+                SiteCheck::insert($chunk);
+            }
+        }
     }
 
     /**

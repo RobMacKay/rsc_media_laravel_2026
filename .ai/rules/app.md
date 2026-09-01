@@ -64,3 +64,14 @@ Mark read on open **and after every action that touches the ticket**, in both `p
 Nothing user-facing may mention VAT unless `StudioSetting::chargesVat()` — the studio is not registered today and wants the option later. That follows `effectiveVatRate()`, so a figure and its label always agree. Invoice documents gate on the invoice's own snapshotted `vat_rate` instead, so an invoice raised while registered keeps its VAT line afterwards.
 
 `StudioSetting` is bound in the container to `current()`. Without it, anything type-hinting the model gets a blank one and quietly bills the class defaults for VAT and payment terms rather than the studio's saved settings.
+
+## Site monitoring: never fetch a private address, and fake the TLS handshake
+Clients add sites at `pages::client.health` and the server fetches them on a schedule, so every URL must pass `App\Rules\PubliclyRoutableUrl` — it resolves the host and refuses loopback, private and reserved ranges. Without it the monitor is a way to probe whatever the server can reach, including cloud metadata endpoints. Never skip it on a new entry point.
+
+`App\Actions\Sites\CheckSite` is the one place a site is checked, logged and reported on. It uses the `Http` facade so tests can `Http::fake()`, and reads certificates through the `CertificateInspector` contract, bound to `OpenSslCertificateInspector` and swapped for `Tests\Support\FakeCertificateInspector` in tests — a real TLS handshake is not something a test suite should do.
+
+Emails are deliberately quiet: `FAILURES_BEFORE_EMAIL` consecutive failures before the first "your site is down", `down_notified_at` so one outage sends one email, and one all-clear on recovery which re-arms the next warning. Do not email on every failed check.
+
+Watch out in tests: calling `Http::fake()` a second time keeps the first matching stub, so a site never appears to recover. Use `Http::fakeSequence()` when the status has to change during a test.
+
+`sites:check` runs every fifteen minutes from `routes/console.php`, so Forge's scheduler has to be on for any of this to happen.

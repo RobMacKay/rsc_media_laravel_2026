@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use App\Models\StudioSetting;
+use App\Support\Sites\CertificateInspector;
+use App\Support\Sites\OpenSslCertificateInspector;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +23,10 @@ class AppServiceProvider extends ServiceProvider
         // and an invoice built through it would quietly use the class defaults
         // for VAT and payment terms rather than what the studio actually set.
         $this->app->bind(StudioSetting::class, fn () => StudioSetting::current());
+
+        // Reading a certificate means opening a real TLS connection, so it sits
+        // behind a contract that tests can swap for a fake.
+        $this->app->bind(CertificateInspector::class, OpenSslCertificateInspector::class);
     }
 
     /**
