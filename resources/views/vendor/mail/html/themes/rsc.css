@@ -1,0 +1,327 @@
+/* RSC Media — the light side of the portal, in an email.
+   Everything is literal hex: this file is inlined onto the markup before
+   sending, and custom properties do not survive that, nor do most clients
+   understand them. */
+
+body {
+    background-color: #eef4f2;
+    color: #0a2029;
+    font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: none;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    width: 100% !important;
+    height: 100%;
+    line-height: 1.5;
+    position: relative;
+}
+
+body *:not(html):not(style):not(br):not(tr):not(code) {
+    box-sizing: border-box;
+    font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    position: relative;
+}
+
+a {
+    color: #0d7d63;
+    text-decoration: underline;
+}
+
+a img {
+    border: none;
+}
+
+/* Headings pick up the display face and the tight tracking the site uses. */
+h1 {
+    color: #0a2029;
+    font-family: 'Schibsted Grotesk', Helvetica, Arial, sans-serif;
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    margin-top: 0;
+    margin-bottom: 18px;
+    text-align: left;
+}
+
+h2 {
+    color: #0a2029;
+    font-family: 'Schibsted Grotesk', Helvetica, Arial, sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-top: 0;
+    text-align: left;
+}
+
+h3 {
+    color: #0a2029;
+    font-family: 'Schibsted Grotesk', Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    margin-top: 0;
+    text-align: left;
+}
+
+p {
+    color: #0a2029;
+    font-size: 15px;
+    line-height: 1.6;
+    margin-top: 0;
+    margin-bottom: 16px;
+    text-align: left;
+}
+
+p.sub {
+    font-size: 13px;
+}
+
+blockquote {
+    border-left: 3px solid #0d7d63;
+    color: rgba(10, 32, 41, 0.75);
+    margin: 20px 0;
+    padding-left: 16px;
+}
+
+img {
+    border: none;
+    max-width: 100%;
+}
+
+/* Layout */
+
+.wrapper {
+    background-color: #eef4f2;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+}
+
+.content {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+}
+
+/* Header — the wordmark, set the way the site sets its mono labels. */
+
+.header {
+    padding: 30px 0 22px;
+    text-align: center;
+}
+
+.header a {
+    color: #0d7d63;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+}
+
+.logo {
+    height: 22px;
+    max-height: 22px;
+    width: auto;
+}
+
+/* Body */
+
+.body {
+    background-color: #eef4f2;
+    border-bottom: 1px solid #eef4f2;
+    border-top: 1px solid #eef4f2;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+}
+
+.inner-body {
+    background-color: #fbfdfc;
+    border: 1px solid rgba(8, 34, 42, 0.15);
+    border-radius: 18px;
+    margin: 0 auto;
+    padding: 0;
+    width: 570px;
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 570px;
+}
+
+.inner-body a {
+    color: #0d7d63;
+    word-break: break-word;
+}
+
+.content-cell {
+    max-width: 100vw;
+    padding: 34px;
+}
+
+/* Subcopy — the small print under the main message. */
+
+.subcopy {
+    border-top: 1px solid rgba(8, 34, 42, 0.15);
+    margin-top: 26px;
+    padding-top: 22px;
+}
+
+.subcopy p {
+    color: rgba(10, 32, 41, 0.62);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.subcopy a {
+    color: rgba(10, 32, 41, 0.62);
+}
+
+/* Footer */
+
+.footer {
+    margin: 0 auto;
+    padding: 0;
+    text-align: center;
+    width: 570px;
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 570px;
+}
+
+.footer p {
+    color: rgba(10, 32, 41, 0.62);
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.7;
+    text-align: center;
+}
+
+.footer a {
+    color: rgba(10, 32, 41, 0.62);
+    text-decoration: underline;
+}
+
+/* Tables */
+
+.table table {
+    margin: 26px auto;
+    width: 100%;
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+}
+
+.table th {
+    border-bottom: 1px solid rgba(8, 34, 42, 0.15);
+    color: rgba(10, 32, 41, 0.62);
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    margin: 0;
+    padding-bottom: 8px;
+    text-transform: lowercase;
+}
+
+.table td {
+    color: #0a2029;
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(8, 34, 42, 0.15);
+}
+
+/* Buttons — the site's pill, in the accent green. */
+
+.action {
+    margin: 26px auto;
+    padding: 0;
+    text-align: center;
+    width: 100%;
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+}
+
+.button {
+    border-radius: 999px;
+    color: #f4fbf9;
+    display: inline-block;
+    font-family: 'Schibsted Grotesk', Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
+    overflow: hidden;
+    padding: 15px 30px;
+    text-align: center;
+    text-decoration: none;
+}
+
+.button-primary {
+    background-color: #0d7d63;
+    border: 1px solid #0d7d63;
+    color: #f4fbf9;
+}
+
+.button-success {
+    background-color: #0d7d63;
+    border: 1px solid #0d7d63;
+    color: #f4fbf9;
+}
+
+.button-error {
+    background-color: #c2521f;
+    border: 1px solid #c2521f;
+    color: #f4fbf9;
+}
+
+/* `.inner-body a` is two classes deep and would otherwise win over `.button`,
+   painting the label the same green as the pill it sits on. */
+.inner-body a.button,
+.inner-body a.button-primary,
+.inner-body a.button-success,
+.inner-body a.button-error {
+    color: #f4fbf9;
+    text-decoration: none;
+}
+
+/* Panels — the tinted callout used for codes and quoted detail. */
+
+.panel {
+    border-left: 3px solid #0d7d63;
+    margin: 22px 0;
+}
+
+.panel-content {
+    background-color: #eef4f2;
+    color: #0a2029;
+    padding: 18px;
+}
+
+.panel-content p {
+    color: #0a2029;
+}
+
+.panel-item {
+    padding: 0;
+}
+
+.panel-item p:last-of-type {
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.break-all {
+    word-break: break-all;
+}
