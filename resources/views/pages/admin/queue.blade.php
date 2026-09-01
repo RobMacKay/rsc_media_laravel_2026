@@ -1,9 +1,11 @@
 <?php
 
+use App\Actions\Attachments\StoreAttachment;
 use App\Enums\BillingMode;
 use App\Enums\QuoteResponse;
 use App\Enums\TicketPriority;
 use App\Enums\TicketStatus;
+use App\Models\Attachment;
 use App\Models\StudioSetting;
 use App\Models\Ticket;
 use Illuminate\Support\Facades\Auth;
@@ -15,11 +17,14 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 new
 #[Layout('layouts::rsc.admin')]
 #[Title('Queue')]
 class extends Component {
+    use WithFileUploads;
+
     #[Url(as: 'filter', except: 'all')]
     public string $filter = 'all';
 
@@ -34,6 +39,9 @@ class extends Component {
     public bool $detailOpen = false;
 
     public bool $shareUploads = true;
+
+    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    public array $uploads = [];
 
     /**
      * Get every ticket across all clients, most pressing first.
@@ -105,7 +113,7 @@ class extends Component {
     {
         $this->selectedReference = $reference;
         $this->detailOpen = true;
-        $this->reset('reply');
+        $this->reset('reply', 'uploads');
         $this->resetValidation();
 
         unset($this->current);
@@ -117,6 +125,63 @@ class extends Component {
     public function closeDetail(): void
     {
         $this->detailOpen = false;
+    }
+
+    /**
+     * Attach one or more files to the ticket being looked at.
+     */
+    public function attachFiles(): void
+    {
+        $ticket = $this->current;
+
+        abort_unless($ticket, 404);
+
+        $this->validate(
+            [
+                'uploads' => ['required', 'array', 'max:10'],
+                'uploads.*' => Attachment::rules(Attachment::STUDIO_MIMES, Attachment::maxUploadKb(Attachment::STUDIO_MAX_KB)),
+            ],
+            [
+                'uploads.required' => __('Choose a file first.'),
+                'uploads.max' => __('Ten files at a time is the limit.'),
+                ...Attachment::messages('uploads.*', Attachment::STUDIO_MIMES, Attachment::maxUploadKb(Attachment::STUDIO_MAX_KB)),
+            ],
+            ['uploads.*' => __('file')],
+        );
+
+        foreach ($this->uploads as $upload) {
+            app(StoreAttachment::class)->handle($ticket, $upload, Auth::user(), $this->shareUploads);
+        }
+
+        $count = count($this->uploads);
+
+        $this->reset('uploads');
+
+        unset($this->current, $this->tickets);
+
+        Flux::toast(variant: 'success', text: trans_choice(
+            '{1}Attached 1 file.|[2,*]Attached :count files.',
+            $count,
+            ['count' => $count],
+        ));
+    }
+
+    /**
+     * Remove a file from the ticket being looked at.
+     */
+    public function removeFile(int $attachmentId): void
+    {
+        $ticket = $this->current;
+
+        abort_unless($ticket, 404);
+
+        $attachment = $ticket->attachments()->findOrFail($attachmentId);
+
+        $attachment->delete();
+
+        unset($this->current, $this->tickets);
+
+        Flux::toast(variant: 'success', text: __('Removed :name.', ['name' => $attachment->name]));
     }
 
     /**
@@ -369,23 +434,36 @@ class extends Component {
                     <div class="mb-4 font-mono text-[11px] tracking-[0.08em] text-muted">files</div>
                     <div class="flex flex-col gap-2.5">
                         @forelse ($ticket->attachments as $file)
-                            <div class="grid grid-cols-[44px_1fr_auto] items-center gap-3.5 rounded-[14px] border border-line px-3.5 py-3">
-                                <span class="grid h-[34px] place-items-center rounded-[9px] font-mono text-[10px] tracking-[0.04em]"
-                                      @style([
-                                          'color: var(--rsc-accent); background: color-mix(in srgb, var(--rsc-accent) 14%, transparent)' => $file->shared_with_client,
-                                          'color: var(--rsc-muted); background: color-mix(in srgb, var(--rsc-text) 8%, transparent)' => ! $file->shared_with_client,
-                                      ])>{{ $file->kind }}</span>
-                                <span class="min-w-0">
-                                    <span class="block font-display text-sm font-bold break-words">{{ $file->name }}</span>
-                                    <span class="mt-[3px] block font-mono text-[11px] text-muted">{{ $file->metaLabel() }}</span>
-                                </span>
-                                <x-rsc.pill :tone="$file->shared_with_client ? 'brand' : 'muted'" class="!text-[10px] !tracking-[0.06em]">
-                                    {{ $file->shared_with_client ? 'client' : 'internal' }}
-                                </x-rsc.pill>
-                            </div>
+                            <x-rsc.attachment :file="$file" show-share wire:key="file-{{ $file->id }}">
+                                <x-slot:action>
+                                    <button type="button" wire:click="removeFile({{ $file->id }})"
+                                            wire:confirm="{{ __('Remove :name?', ['name' => $file->name]) }}"
+                                            class="cursor-pointer bg-transparent p-0 font-mono text-[11px] text-muted transition-colors hover:text-warm">
+                                        {{ __('remove') }}
+                                    </button>
+                                </x-slot:action>
+                            </x-rsc.attachment>
                         @empty
                             <p class="text-[13px] text-muted">{{ __('Nothing attached yet.') }}</p>
                         @endforelse
+                    </div>
+
+                    <div class="mt-3 flex flex-col gap-3.5">
+                        <x-rsc.dropzone name="uploads" model="uploads" multiple
+                                        :title="__('Attach a file')"
+                                        :hint="__('Quotes, invoices, specs, screenshots. Up to :size.', ['size' => \Illuminate\Support\Number::fileSize(\App\Models\Attachment::maxUploadKb(\App\Models\Attachment::STUDIO_MAX_KB) * 1024)])" />
+
+                        <label class="flex cursor-pointer items-center gap-2.5 text-[13px] text-muted">
+                            <input type="checkbox" wire:model.live="shareUploads"
+                                   class="size-4 accent-[var(--rsc-accent)]">
+                            <span>{{ __('Visible to the client as soon as it uploads') }}</span>
+                        </label>
+
+                        @if ($uploads)
+                            <x-rsc.button wire:click="attachFiles" class="self-start !px-5 !py-2.5 !text-sm">
+                                {{ trans_choice('{1}Upload 1 file|[2,*]Upload :count files', count($uploads), ['count' => count($uploads)]) }}
+                            </x-rsc.button>
+                        @endif
                     </div>
 
                     <label class="mt-3.5 flex cursor-pointer items-center gap-2.5 text-[13px] text-muted">

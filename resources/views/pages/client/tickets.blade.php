@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Attachments\StoreAttachment;
 use App\Enums\QuoteResponse;
 use App\Enums\TicketPriority;
 use App\Enums\TicketStatus;
@@ -17,11 +18,14 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 new
 #[Layout('layouts::rsc.client')]
 #[Title('Tickets')]
 class extends Component {
+    use WithFileUploads;
+
     #[Url(as: 'filter', except: 'all')]
     public string $filter = 'all';
 
@@ -46,6 +50,12 @@ class extends Component {
     public string $pageUrl = '';
 
     public string $description = '';
+
+    /** The screenshot attached while raising a ticket. */
+    public $upload = null;
+
+    /** A file added to a ticket that is already open. */
+    public $reply = null;
 
     /**
      * Get the business the signed-in person is looking at.
@@ -184,9 +194,51 @@ class extends Component {
 
         $ticket->touch();
 
-        $this->reset('comment');
+        if ($this->reply) {
+            app(StoreAttachment::class)->handle($ticket, $this->reply, Auth::user());
+        }
 
-        unset($this->selected, $this->conversation, $this->tickets);
+        $this->reset('comment', 'reply');
+
+        unset($this->selected, $this->conversation, $this->tickets, $this->sharedFiles);
+    }
+
+    /**
+     * Attach a file to a ticket that is already open, without saying anything.
+     */
+    public function attachToTicket(): void
+    {
+        abort_unless(Auth::user()->accessFor()->canRaiseTickets(), 403);
+
+        $ticket = $this->selected;
+
+        abort_unless($ticket, 404);
+
+        $this->validate(
+            ['reply' => $this->fileRules()],
+            Attachment::messages('reply', Attachment::CLIENT_MIMES, Attachment::maxUploadKb(Attachment::CLIENT_MAX_KB)),
+            ['reply' => __('file')],
+        );
+
+        $file = app(StoreAttachment::class)->handle($ticket, $this->reply, Auth::user());
+
+        $ticket->touch();
+
+        $this->reset('reply');
+
+        unset($this->selected, $this->sharedFiles, $this->tickets);
+
+        Flux::toast(variant: 'success', text: __('Attached :name.', ['name' => $file->name]));
+    }
+
+    /**
+     * Get the validation rules for a file a client is attaching.
+     *
+     * @return array<int, string>
+     */
+    private function fileRules(bool $required = true): array
+    {
+        return Attachment::rules(Attachment::CLIENT_MIMES, Attachment::maxUploadKb(Attachment::CLIENT_MAX_KB), $required);
     }
 
     /**
@@ -258,7 +310,11 @@ class extends Component {
             'system' => ['nullable', 'string', 'max:255'],
             'pageUrl' => ['nullable', 'string', 'max:255'],
             'description' => ['required', 'string'],
-        ]);
+            'upload' => $this->fileRules(required: false),
+        ],
+            Attachment::messages('upload', Attachment::CLIENT_MIMES, Attachment::maxUploadKb(Attachment::CLIENT_MAX_KB)),
+            ['upload' => __('file')],
+        );
 
         $ticket = $this->team->tickets()->create([
             'reference' => Ticket::nextReference(),
@@ -272,7 +328,11 @@ class extends Component {
             'status' => TicketStatus::Open,
         ]);
 
-        $this->reset('subject', 'system', 'pageUrl', 'description');
+        if ($this->upload) {
+            app(StoreAttachment::class)->handle($ticket, $this->upload, Auth::user());
+        }
+
+        $this->reset('subject', 'system', 'pageUrl', 'description', 'upload');
         $this->raisedReference = $ticket->reference;
 
         unset($this->tickets, $this->totalCount);
@@ -365,6 +425,10 @@ class extends Component {
                         <x-rsc.textarea wire:model="description" rows="5"
                                         placeholder="{{ __('What happened, and what you expected instead') }}" />
                     </x-rsc.field>
+
+                    <x-rsc.dropzone name="upload" model="upload"
+                                    :title="__('Attach a screenshot')"
+                                    :hint="__('PNG, JPG or PDF, up to :size.', ['size' => \Illuminate\Support\Number::fileSize(\App\Models\Attachment::maxUploadKb(\App\Models\Attachment::CLIENT_MAX_KB) * 1024)])" />
 
                     <div class="flex flex-wrap items-center gap-4">
                         <x-rsc.button type="submit" class="px-[30px] py-3.5">{{ __('Send ticket') }}</x-rsc.button>
@@ -496,22 +560,31 @@ class extends Component {
                     </div>
                 @endif
 
-                @if ($this->sharedFiles->isNotEmpty())
-                    <div>
-                        <div class="mb-2.5 font-mono text-[11px] text-muted">files</div>
-                        <div class="flex flex-col gap-2.5">
+                <div>
+                    <div class="mb-2.5 font-mono text-[11px] text-muted">files</div>
+
+                    @if ($this->sharedFiles->isNotEmpty())
+                        <div class="mb-2.5 flex flex-col gap-2.5">
                             @foreach ($this->sharedFiles as $file)
-                                <div class="grid grid-cols-[44px_1fr] items-center gap-3.5 rounded-[14px] border border-line px-3.5 py-3">
-                                    <span class="grid h-[34px] place-items-center rounded-[9px] font-mono text-[10px] text-brand rsc-tint">{{ $file->kind }}</span>
-                                    <span class="min-w-0">
-                                        <span class="block font-display text-sm font-bold break-words">{{ $file->name }}</span>
-                                        <span class="mt-[3px] block font-mono text-[11px] text-muted">{{ $file->metaLabel() }}</span>
-                                    </span>
-                                </div>
+                                <x-rsc.attachment :file="$file" wire:key="file-{{ $file->id }}" />
                             @endforeach
                         </div>
-                    </div>
-                @endif
+                    @endif
+
+                    @if (auth()->user()->accessFor()->canRaiseTickets())
+                        <x-rsc.dropzone name="reply" model="reply"
+                                        :title="__('Attach a file')"
+                                        :hint="__('PNG, JPG or PDF, up to :size.', ['size' => \Illuminate\Support\Number::fileSize(\App\Models\Attachment::maxUploadKb(\App\Models\Attachment::CLIENT_MAX_KB) * 1024)])" />
+
+                        @if ($reply)
+                            <x-rsc.button wire:click="attachToTicket" class="mt-2.5 !px-5 !py-2.5 !text-sm">
+                                {{ __('Add this file') }}
+                            </x-rsc.button>
+                        @endif
+                    @elseif ($this->sharedFiles->isEmpty())
+                        <p class="m-0 text-[13px] text-muted">{{ __('Nothing attached yet.') }}</p>
+                    @endif
+                </div>
 
                 <div>
                     <div class="mb-2.5 font-mono text-[11px] text-muted">conversation</div>

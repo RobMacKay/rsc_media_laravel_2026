@@ -27,6 +27,8 @@ use App\Models\TicketComment;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Seeds the three demo clients that the Claude Design mock-ups were drawn around,
@@ -264,9 +266,9 @@ class DemoClientSeeder extends Seeder
         ]);
 
         Attachment::insert([
-            $this->file($vatTicket, $ross, 'quote-vat-fix-estimate.pdf', 'PDF', 86_016, true),
-            $this->file($vatTicket, $kirsty, 'vat-rate-config.png', 'PNG', 421_888, true),
-            $this->file($vatTicket, $ross, 'internal-notes-tax-table.md', 'MD', 3_072, false),
+            $this->file($vatTicket, $ross, 'quote-vat-fix-estimate.pdf', 'PDF', true),
+            $this->file($vatTicket, $kirsty, 'vat-rate-config.png', 'PNG', true),
+            $this->file($vatTicket, $ross, 'internal-notes-tax-table.md', 'MD', false),
         ]);
 
         $this->project($braemar, [
@@ -384,15 +386,22 @@ class DemoClientSeeder extends Seeder
      *
      * @return array<string, mixed>
      */
-    private function file(Ticket $ticket, User $uploader, string $name, string $kind, int $size, bool $shared): array
+    private function file(Ticket $ticket, User $uploader, string $name, string $kind, bool $shared): array
     {
+        // A real file on the private disk, so the demo's download links work
+        // rather than 404ing the moment anyone clicks one.
+        $path = 'attachments/tickets/'.$ticket->id.'/'.Str::ulid().'.'.Str::lower(Str::afterLast($name, '.'));
+
+        Storage::disk('local')->put($path, str_repeat('RSC Media demo file. ', 24)."\n".$name."\n");
+
         return [
             'attachable_type' => Ticket::class,
             'attachable_id' => $ticket->id,
             'uploaded_by' => $uploader->id,
             'name' => $name,
+            'path' => $path,
             'kind' => $kind,
-            'size' => $size,
+            'size' => Storage::disk('local')->size($path),
             'shared_with_client' => $shared,
             'created_at' => now(),
             'updated_at' => now(),

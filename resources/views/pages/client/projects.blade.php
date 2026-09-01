@@ -66,6 +66,7 @@ class extends Component {
             ]);
 
         $projects = $this->team->projects()
+            ->with('attachments')
             ->get()
             ->map(fn (Project $project) => [
                 'kind' => 'project',

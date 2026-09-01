@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AttachmentDownloadController;
 use App\Http\Controllers\InvoiceDownloadController;
 use App\Http\Middleware\EnsureUserHasClientAccess;
 use App\Http\Middleware\EnsureUserHasOnboarded;
@@ -10,6 +11,8 @@ Route::livewire('/', 'pages::home')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('welcome', 'pages::onboarding')->name('onboarding');
+
+    Route::get('files/{attachment}', AttachmentDownloadController::class)->name('attachments.download');
 
     Route::prefix('client')->middleware(EnsureUserHasOnboarded::class)->name('client.')->group(function () {
         Route::livewire('/', 'pages::client.dashboard')->name('dashboard');

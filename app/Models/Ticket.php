@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Contracts\HasAttachments;
 use App\Enums\BillingMode;
 use App\Enums\QuoteResponse;
 use App\Enums\TicketPriority;
@@ -56,7 +57,7 @@ use Illuminate\Support\Carbon;
     'quoted_hours', 'quoted_rate', 'billing_mode', 'quote_sent_at',
     'quote_response', 'quote_responded_at', 'resolved_at',
 ])]
-class Ticket extends Model
+class Ticket extends Model implements HasAttachments
 {
     /** @use HasFactory<TicketFactory> */
     use HasFactory;
@@ -129,6 +130,14 @@ class Ticket extends Model
     public function attachments(): MorphMany
     {
         return $this->morphMany(Attachment::class, 'attachable');
+    }
+
+    /**
+     * Get the client business this record belongs to.
+     */
+    public function teamId(): int
+    {
+        return $this->team_id;
     }
 
     /**
