@@ -103,7 +103,13 @@ test('over-invoicing never produces a negative balance', function () {
 });
 
 test('the studio can raise the final invoice for a project', function () {
-    StudioSetting::current()->update(['vat_registered' => true, 'vat_rate' => 20, 'payment_terms_days' => 21]);
+    StudioSetting::current()->update([
+        'vat_registered' => true,
+        'vat_rate' => 20,
+        // VAT is only charged once there is a number to put on the invoice.
+        'vat_number' => 'GB412887309',
+        'payment_terms_days' => 21,
+    ]);
 
     $team = Team::factory()->create(['payment_terms_days' => 14]);
     $project = Project::factory()->for($team)->create(['title' => 'Site rebuild', 'agreed_value' => 7680]);

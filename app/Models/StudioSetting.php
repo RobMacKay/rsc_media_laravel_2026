@@ -86,11 +86,17 @@ class StudioSetting extends Model
     }
 
     /**
-     * Get the effective VAT rate, which is zero while the studio is not registered.
+     * Get the effective VAT rate, which is zero until the studio is both
+     * registered and has a VAT number to put on the invoice.
+     *
+     * The number is part of the switch, not decoration: a VAT invoice has to
+     * show it, so charging VAT without one would produce an invoice that is
+     * not valid. It also means clearing the number is enough to stop VAT
+     * appearing anywhere, which is how the studio expects it to behave.
      */
     public function effectiveVatRate(): float
     {
-        return $this->vat_registered ? $this->vat_rate : 0.0;
+        return $this->vat_registered && filled($this->vat_number) ? $this->vat_rate : 0.0;
     }
 
     /**

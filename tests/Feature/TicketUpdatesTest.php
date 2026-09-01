@@ -3,7 +3,9 @@
 use App\Actions\Billing\RaiseInvoice;
 use App\Enums\ClientAccess;
 use App\Enums\InvoiceType;
+use App\Enums\ProposalStatus;
 use App\Enums\TicketStatus;
+use App\Models\Proposal;
 use App\Models\StudioSetting;
 use App\Models\Team;
 use App\Models\Ticket;
@@ -170,8 +172,12 @@ test('VAT is only mentioned when the studio actually charges it', function () {
         ->assertDontSee('Excluding VAT');
 });
 
-test('VAT comes back the moment the studio registers', function () {
-    StudioSetting::current()->update(['vat_registered' => true, 'vat_rate' => 20]);
+test('VAT comes back once the studio is registered and has a number', function () {
+    StudioSetting::current()->update([
+        'vat_registered' => true,
+        'vat_rate' => 20,
+        'vat_number' => 'GB412887309',
+    ]);
 
     $team = Team::factory()->create();
     $client = memberOf($team, ClientAccess::Full);
@@ -289,4 +295,67 @@ test('but the other side still sees it as new', function () {
 
     expect($ticket->load('reads')->hasUpdateFor($admin))->toBeFalse()
         ->and($ticket->load('reads')->hasUpdateFor($client))->toBeTrue();
+});
+
+test('the VAT number is part of the switch, not decoration', function () {
+    $settings = StudioSetting::current();
+
+    // Registered, but no number to put on the invoice.
+    $settings->update(['vat_registered' => true, 'vat_rate' => 20, 'vat_number' => null]);
+
+    expect(StudioSetting::current()->effectiveVatRate())->toBe(0.0)
+        ->and(StudioSetting::current()->chargesVat())->toBeFalse();
+
+    $settings->update(['vat_number' => 'GB412887309']);
+
+    expect(StudioSetting::current()->effectiveVatRate())->toBe(20.0)
+        ->and(StudioSetting::current()->chargesVat())->toBeTrue();
+
+    // And the toggle still wins on its own.
+    $settings->update(['vat_registered' => false]);
+
+    expect(StudioSetting::current()->effectiveVatRate())->toBe(0.0);
+});
+
+test('a proposed job quotes no VAT until there is a number to charge it under', function () {
+    $team = Team::factory()->create();
+    $client = memberOf($team, ClientAccess::Full);
+
+    Proposal::factory()->for($team)->create([
+        'status' => ProposalStatus::Sent,
+        'price' => 3400,
+        'deposit_percent' => 40,
+    ]);
+
+    StudioSetting::current()->update(['vat_registered' => true, 'vat_rate' => 20, 'vat_number' => null]);
+
+    $this->actingAs($client)
+        ->get(route('client.projects'))
+        ->assertOk()
+        ->assertSee('£3,400')
+        ->assertDontSee('VAT');
+
+    StudioSetting::current()->update(['vat_number' => 'GB412887309']);
+
+    $this->actingAs($client)
+        ->get(route('client.projects'))
+        ->assertOk()
+        ->assertSee('+ VAT');
+});
+
+test('an invoice raised with no VAT number carries no VAT', function () {
+    StudioSetting::current()->update(['vat_registered' => true, 'vat_rate' => 20, 'vat_number' => null]);
+
+    $invoice = app(RaiseInvoice::class)->handle(
+        team: Team::factory()->create(),
+        type: InvoiceType::AdHoc,
+        note: 'Some work',
+        amount: 900,
+    );
+
+    // The copy and the charge have to agree: hiding the label while still
+    // adding 20% would be worse than either.
+    expect((float) $invoice->vat_rate)->toBe(0.0)
+        ->and($invoice->vatAmount())->toBe(0.0)
+        ->and($invoice->total())->toBe(900.0);
 });
