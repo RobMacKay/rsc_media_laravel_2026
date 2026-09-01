@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Actions\Billing\RaiseInvoice;
+use App\Enums\Currency;
 use App\Enums\InvoiceType;
 use App\Enums\ProjectPhase;
 use App\Enums\ProposalStatus;
@@ -58,11 +59,23 @@ class Proposal extends Model
     use HasFactory;
 
     /**
-     * The budget brackets offered on the client's proposal form.
+     * Get the budget brackets offered on the client's proposal form, in the
+     * currency that client is billed in.
      *
-     * @var array<int, string>
+     * @return array<int, string>
      */
-    public const BUDGETS = ['Under £1k', '£1k–£3k', '£3k–£7k', '£7k+', 'No idea yet'];
+    public static function budgets(Currency $currency): array
+    {
+        $symbol = $currency->symbol();
+
+        return [
+            "Under {$symbol}1k",
+            "{$symbol}1k–{$symbol}3k",
+            "{$symbol}3k–{$symbol}7k",
+            "{$symbol}7k+",
+            'No idea yet',
+        ];
+    }
 
     /**
      * Allocate the next sequential reference, shared with projects so a signed
@@ -184,7 +197,7 @@ class Proposal extends Model
                 'percent' => 0,
                 'milestone' => $this->phaseRows()[0]['name'] ?? 'Kick-off call',
                 'due_on' => now()->addWeeks(max($this->weeks, 1)),
-                'value_label' => '£'.number_format($this->price).' fixed',
+                'value_label' => $this->team->money($this->price).' fixed',
                 'agreed_value' => $this->price,
             ]);
 

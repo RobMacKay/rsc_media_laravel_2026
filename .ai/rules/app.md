@@ -24,3 +24,12 @@ Every invoice is created through `App\Actions\Billing\RaiseInvoice`, so the numb
 `agreed_value` is the numeric contract total; `value_label` is display only. Null `agreed_value` means there is nothing fixed to bill against, such as a care plan, and the project stays out of the billing queue.
 
 A ticket is billable when it is `Chargeable`, the client approved the quote, and no invoice references it — `Ticket::isReadyToInvoice()`. `invoices.ticket_id` is what stops it being billed twice.
+
+## Money is per client, and never converted
+Each client (Team) has a `currency` (App\Enums\Currency: GBP, EUR, USD, CAD; GBP is `Currency::Base`). Everything quoted or invoiced to that client is in it.
+
+Never hardcode a currency symbol. Use `$team->money($amount)` for anything in a client's context, `$invoice->money($amount)` for an invoice, and `Currency::Base->format()` for the studio's own numbers (its default rates and plan prices).
+
+Invoices snapshot `currency` from the client when raised (in RaiseInvoice), so moving a client to another currency never restates what has already been issued.
+
+There are no exchange rates in this app. A studio default rate used by a non-GBP client is charged as that many of the client's currency — the settings screen warns about this rather than converting. Anything added up across clients must go through `App\Support\Money::total()`, which prints "£4,200 + $1,800 USD" rather than pretending mixed currencies are one number.

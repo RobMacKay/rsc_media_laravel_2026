@@ -153,7 +153,7 @@ class extends Component {
                 </div>
                 <div class="mt-1.5 text-[13px] text-muted">
                     {{ $this->nextInvoice
-                        ? '£'.number_format($this->nextInvoice->amount).' + VAT, '.$this->nextInvoice->type->label()
+                        ? $this->nextInvoice->money($this->nextInvoice->amount).' + VAT, '.$this->nextInvoice->type->label()
                         : __('Everything is settled') }}
                 </div>
             </x-rsc.panel>

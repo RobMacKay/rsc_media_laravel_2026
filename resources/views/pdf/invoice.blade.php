@@ -155,8 +155,8 @@
                     <div class="muted" style="font-size: 9.5px">{{ $invoice->type->label() }}</div>
                 </td>
                 <td class="right">1</td>
-                <td class="right">£{{ number_format($invoice->amount, 2) }}</td>
-                <td class="right">£{{ number_format($invoice->amount, 2) }}</td>
+                <td class="right">{{ $invoice->money($invoice->amount, 2) }}</td>
+                <td class="right">{{ $invoice->money($invoice->amount, 2) }}</td>
             </tr>
         </tbody>
     </table>
@@ -168,7 +168,7 @@
                 <table class="totals">
                     <tr>
                         <td class="muted">Subtotal</td>
-                        <td class="right">£{{ number_format($invoice->amount, 2) }}</td>
+                        <td class="right">{{ $invoice->money($invoice->amount, 2) }}</td>
                     </tr>
                     <tr>
                         <td class="muted">
@@ -177,11 +177,11 @@
                                 at {{ rtrim(rtrim(number_format($invoice->vat_rate, 1), '0'), '.') }}%
                             @endif
                         </td>
-                        <td class="right">£{{ number_format($invoice->vatAmount(), 2) }}</td>
+                        <td class="right">{{ $invoice->money($invoice->vatAmount(), 2) }}</td>
                     </tr>
                     <tr class="grand">
                         <td>Total due</td>
-                        <td class="right">£{{ number_format($invoice->total(), 2) }}</td>
+                        <td class="right">{{ $invoice->money($invoice->total(), 2) }}</td>
                     </tr>
                 </table>
             </td>

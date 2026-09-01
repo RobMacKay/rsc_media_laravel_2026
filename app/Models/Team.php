@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Concerns\GeneratesUniqueTeamSlugs;
+use App\Enums\Currency;
 use App\Enums\TeamRole;
 use Database\Factories\TeamFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -23,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $plan_id
  * @property string|null $requested_plan
  * @property string|null $billing_email
+ * @property Currency $currency
  * @property string|null $purchase_order_ref
  * @property int|null $hour_rate
  * @property int|null $day_rate
@@ -43,12 +45,23 @@ use Illuminate\Support\Carbon;
  */
 #[Fillable([
     'name', 'slug', 'is_personal', 'plan_id', 'requested_plan', 'billing_email',
-    'purchase_order_ref', 'hour_rate', 'day_rate', 'support_hours', 'payment_terms_days',
+    'purchase_order_ref', 'currency', 'hour_rate', 'day_rate', 'support_hours',
+    'payment_terms_days',
 ])]
 class Team extends Model
 {
     /** @use HasFactory<TeamFactory> */
     use GeneratesUniqueTeamSlugs, HasFactory, SoftDeletes;
+
+    /**
+     * The model's default values, so a client built in memory still bills in
+     * a currency rather than in nothing at all.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'currency' => 'GBP',
+    ];
 
     /**
      * Bootstrap the model and its traits.
@@ -164,6 +177,14 @@ class Team extends Model
     }
 
     /**
+     * Format an amount in this client's currency.
+     */
+    public function money(float $amount, int $decimals = 0): string
+    {
+        return $this->currency->format($amount, $decimals);
+    }
+
+    /**
      * Get the hourly rate that applies to this client, falling back to the studio default.
      */
     public function effectiveHourRate(StudioSetting $settings): int
@@ -218,6 +239,7 @@ class Team extends Model
     {
         return [
             'is_personal' => 'boolean',
+            'currency' => Currency::class,
             'support_hours' => 'float',
         ];
     }

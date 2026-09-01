@@ -107,7 +107,7 @@ class extends Component {
                 </div>
 
                 <div class="flex items-baseline gap-2">
-                    <span class="font-display text-[clamp(30px,3.4vw,42px)] font-extrabold leading-none tracking-[-0.035em]">£{{ number_format($plan->price) }}</span>
+                    <span class="font-display text-[clamp(30px,3.4vw,42px)] font-extrabold leading-none tracking-[-0.035em]">{{ $this->team->money($plan->price) }}</span>
                     <span class="text-[13px] text-muted">{{ __('/ month') }}</span>
                 </div>
 

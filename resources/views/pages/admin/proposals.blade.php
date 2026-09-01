@@ -229,7 +229,7 @@ class extends Component {
     }
 }; ?>
 
-@php $money = fn (float $value) => '£'.number_format(round($value)); @endphp
+@php $money = fn (float $value) => ($this->current?->team ?? $this->team ?? null)?->money(round($value)) ?? \App\Enums\Currency::Base->format(round($value)); @endphp
 
 <div wire:poll.15s>
     <div class="mb-[clamp(20px,2.4vw,30px)] flex flex-wrap items-end justify-between gap-5">

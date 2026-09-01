@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\Currency;
 use App\Enums\ProposalStatus;
 use App\Models\Proposal;
 use App\Models\Team;
@@ -25,7 +26,7 @@ class ProposalFactory extends Factory
             'title' => rtrim(fake()->sentence(3), '.'),
             'brief' => fake()->paragraph(),
             'goal' => fake()->sentence(),
-            'budget_guide' => fake()->randomElement(Proposal::BUDGETS),
+            'budget_guide' => fake()->randomElement(Proposal::budgets(Currency::Base)),
             'needed_by' => 'before the October rush',
             'status' => ProposalStatus::Submitted,
             'deposit_percent' => 40,

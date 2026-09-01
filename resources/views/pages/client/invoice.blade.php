@@ -49,7 +49,7 @@ class extends Component {
     }
 }; ?>
 
-@php $money = fn (float $value) => '£'.number_format($value, 2); @endphp
+@php $money = fn (float $value) => $this->invoice->money($value, 2); @endphp
 
 <div>
     <div class="mb-[clamp(20px,2.4vw,30px)] flex flex-wrap items-center justify-between gap-4">

@@ -40,6 +40,7 @@ class RaiseInvoice
             'note' => $note,
             'amount' => $amount,
             'vat_rate' => $this->settings->effectiveVatRate(),
+            'currency' => $team->currency,
             'issued_on' => now(),
             'due_on' => now()->addDays($team->effectivePaymentTerms($this->settings)),
             'status' => $status,

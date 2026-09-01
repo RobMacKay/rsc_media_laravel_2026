@@ -98,7 +98,7 @@ class extends Component {
      */
     public function chooseBudget(int $index): void
     {
-        $this->budget = Proposal::BUDGETS[$index] ?? $this->budget;
+        $this->budget = Proposal::budgets($this->team->currency)[$index] ?? $this->budget;
     }
 
     /**
@@ -131,7 +131,7 @@ class extends Component {
             'title' => ['required', 'string', 'max:255'],
             'brief' => ['required', 'string', 'max:5000'],
             'goal' => ['nullable', 'string', 'max:2000'],
-            'budget' => ['required', Rule::in(Proposal::BUDGETS)],
+            'budget' => ['required', Rule::in(Proposal::budgets($this->team->currency))],
             'neededBy' => ['nullable', 'string', 'max:255'],
             'contact' => ['nullable', 'string', 'max:255'],
         ]);
@@ -224,7 +224,7 @@ class extends Component {
                     <div>
                         <span class="mb-2 block font-mono text-[11px] text-muted">rough_budget</span>
                         <div class="flex flex-wrap gap-2">
-                            @foreach (\App\Models\Proposal::BUDGETS as $index => $option)
+                            @foreach (\App\Models\Proposal::budgets($this->team->currency) as $index => $option)
                                 <x-rsc.chip wire:click="chooseBudget({{ $index }})" :active="$budget === $option" class="!text-[13px] !font-sans">
                                     {{ $option }}
                                 </x-rsc.chip>

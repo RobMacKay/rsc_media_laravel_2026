@@ -100,7 +100,7 @@ class extends Component {
 }; ?>
 
 @php
-    $money = fn (float $value) => '£'.number_format(round($value));
+    $money = fn (float $value) => $this->team->money($value);
 @endphp
 
 <div>
@@ -156,7 +156,7 @@ class extends Component {
                         </span>
                         <span class="text-[13px] text-muted">{{ $invoice->issued_on->format('j M') }}</span>
                         <span class="text-[13px] {{ $settled ? 'text-muted' : 'text-warm' }}">{{ $settled ? '—' : $invoice->due_on->format('j M') }}</span>
-                        <span class="font-display text-[15px] font-bold">{{ $money($invoice->total()) }}</span>
+                        <span class="font-display text-[15px] font-bold">{{ $invoice->money($invoice->total()) }}</span>
                         <span class="flex flex-col items-start gap-[7px]">
                             <x-rsc.pill :tone="$invoice->status->tone()">{{ str($invoice->status->label())->lower() }}</x-rsc.pill>
                         </span>
@@ -169,7 +169,7 @@ class extends Component {
 
         <div class="flex flex-wrap gap-x-6 gap-y-2.5 px-[22px] py-4 font-mono text-[11px] text-muted">
             <span>{{ __(':shown of :total invoices', ['shown' => $this->invoices->count(), 'total' => $this->allInvoices->count()]) }}</span>
-            <span class="ms-auto">{{ __(':total shown, inc VAT', ['total' => $money($this->invoices->sum(fn ($invoice) => $invoice->total()))]) }}</span>
+            <span class="ms-auto">{{ __(':total shown, inc VAT', ['total' => \App\Support\Money::total($this->invoices, fn (Invoice $invoice) => $invoice->total(), fn (Invoice $invoice) => $invoice->currency)]) }}</span>
         </div>
     </div>
 
