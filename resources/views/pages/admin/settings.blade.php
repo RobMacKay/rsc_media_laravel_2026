@@ -1,11 +1,14 @@
 <?php
 
+use App\Actions\Clients\CreateClient;
 use App\Enums\Currency;
 use App\Models\Plan;
+use App\Models\User;
 use App\Models\StudioSetting;
 use App\Models\Team;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -23,6 +26,16 @@ class extends Component {
     public array $plans = [];
 
     public ?int $clientId = null;
+
+    public bool $addingClient = false;
+
+    public string $newBusiness = '';
+
+    public string $newContactName = '';
+
+    public string $newContactEmail = '';
+
+    public string $newJobTitle = '';
 
     /** @var array<string, mixed> */
     public array $client = [];
@@ -150,6 +163,49 @@ class extends Component {
         ];
 
         unset($this->selectedClient, $this->effective, $this->clientCurrency, $this->unconvertedRates);
+    }
+
+    /**
+     * Show or hide the form for opening a new client account.
+     */
+    public function toggleAddClient(): void
+    {
+        $this->addingClient = ! $this->addingClient;
+        $this->reset('newBusiness', 'newContactName', 'newContactEmail', 'newJobTitle');
+        $this->resetValidation();
+    }
+
+    /**
+     * Open a client account and select it for editing.
+     */
+    public function createClient(): void
+    {
+        $validated = $this->validate([
+            'newBusiness' => ['required', 'string', 'max:255'],
+            'newContactName' => ['required', 'string', 'max:255'],
+            'newContactEmail' => ['required', 'email', 'max:255', Rule::unique(User::class, 'email')],
+            'newJobTitle' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $team = app(CreateClient::class)->handle(
+            business: $validated['newBusiness'],
+            contactName: $validated['newContactName'],
+            contactEmail: $validated['newContactEmail'],
+            jobTitle: $validated['newJobTitle'] ?: null,
+            createdBy: Auth::user(),
+        );
+
+        $this->addingClient = false;
+        $this->reset('newBusiness', 'newContactName', 'newContactEmail', 'newJobTitle');
+
+        unset($this->clients);
+
+        $this->selectClient($team->id);
+
+        Flux::toast(variant: 'success', text: __(':business is set up. :name has been emailed to set a password.', [
+            'business' => $team->name,
+            'name' => $validated['newContactName'],
+        ]));
     }
 
     /**
@@ -489,7 +545,21 @@ class extends Component {
                         {{ $team->name }}
                     </x-rsc.chip>
                 @endforeach
+                <x-rsc.chip wire:click="toggleAddClient" :active="$addingClient" class="!text-[13px] !font-sans">
+                    {{ $addingClient ? __('Cancel') : __('+ New client') }}
+                </x-rsc.chip>
             </div>
+
+            @if ($addingClient)
+                <div class="mb-5 flex flex-col gap-5 rounded-[14px] border border-dashed border-line p-[clamp(18px,2vw,24px)]">
+                    @include('pages.admin.partials.new-client-fields')
+
+                    <div class="flex flex-wrap items-center gap-3.5">
+                        <x-rsc.button wire:click="createClient" class="!px-[22px] !py-3 !text-sm">{{ __('Create and email them') }}</x-rsc.button>
+                        <span class="text-[13px] text-muted">{{ __('They become the owner, with full access.') }}</span>
+                    </div>
+                </div>
+            @endif
 
             <div class="mb-[18px]">
                 <div class="mb-2.5 font-mono text-[11px] tracking-[0.08em] text-muted">currency</div>

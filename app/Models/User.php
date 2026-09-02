@@ -30,6 +30,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $onboarded_at
  * @property Carbon|null $email_verified_at
  * @property bool $is_admin
+ * @property bool $must_set_password
  * @property string $password
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
@@ -45,7 +46,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  */
 #[Fillable([
     'name', 'email', 'phone', 'password', 'current_team_id', 'is_admin',
-    'contact_preference', 'notification_preferences', 'onboarded_at',
+    'contact_preference', 'notification_preferences', 'onboarded_at', 'must_set_password',
 ])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements PasskeyUser
@@ -85,6 +86,7 @@ class User extends Authenticatable implements PasskeyUser
         return [
             'email_verified_at' => 'datetime',
             'is_admin' => 'boolean',
+            'must_set_password' => 'boolean',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
             'contact_preference' => ContactPreference::class,

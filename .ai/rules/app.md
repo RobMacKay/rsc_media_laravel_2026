@@ -75,3 +75,12 @@ Emails are deliberately quiet: `FAILURES_BEFORE_EMAIL` consecutive failures befo
 Watch out in tests: calling `Http::fake()` a second time keeps the first matching stub, so a site never appears to recover. Use `Http::fakeSequence()` when the status has to change during a test.
 
 `sites:check` runs every fifteen minutes from `routes/console.php`, so Forge's scheduler has to be on for any of this to happen.
+
+## The studio can open client accounts; the welcome link sets the password
+`App\Actions\Clients\CreateClient` is the one place the studio opens an account for someone: it makes the Team, the first User as Owner with `ClientAccess::Full`, and emails them. Used from both the admin invoices panel and the settings screen, which share `pages/admin/partials/new-client-fields.blade.php` so the two forms cannot drift.
+
+The account is created with `Str::password(32)` that nobody ever sees, plus `must_set_password = true`. The `SetYourPassword` notification carries a **signed, 7-day** link to `password.set`, not a password reset token — that way the studio can give someone a week without loosening how long a real reset stays valid. `must_set_password` is what makes the link single-use: the page 404s once it is false.
+
+Setting the password signs them in and verifies the email (the studio typed the address and the person just proved they read it), and they land in the onboarding wizard because `onboarded_at` is still null.
+
+Note when testing signed URLs by hand: the signature covers scheme and host, so a link generated with `APP_URL=https` 403s when opened over http locally.
