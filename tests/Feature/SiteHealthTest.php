@@ -7,11 +7,13 @@ use App\Models\Site;
 use App\Models\SiteCheck;
 use App\Models\StudioSetting;
 use App\Models\Team;
+use App\Models\User;
 use App\Notifications\SiteIsBackUp;
 use App\Notifications\SiteIsDown;
 use App\Support\Sites\CertificateInspector;
 use App\Support\Sites\SshProbe;
 use App\Support\Sites\SshResult;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
@@ -506,4 +508,143 @@ test('the SSH banner is read for the server version, and shrugged off when odd',
     expect($probe->serverVersion())->toBe('OpenSSH_9.6p1')
         ->and((new SshResult(reachable: true, banner: 'nonsense'))->serverVersion())->toBeNull()
         ->and((new SshResult(reachable: false))->serverVersion())->toBeNull();
+});
+
+test('the studio can watch a site of its own', function () {
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.health')
+        ->call('toggleForm')
+        ->set('name', 'RSC Media site')
+        ->set('url', 'rscmedia.co.uk')
+        ->call('addSite')
+        ->assertHasNoErrors();
+
+    $site = Site::query()->studioOwned()->sole();
+
+    expect($site->team_id)->toBeNull()
+        ->and($site->host)->toBe('rscmedia.co.uk')
+        ->and($site->isStudioOwned())->toBeTrue()
+        ->and($site->ownerLabel())->toBe('RSC Media');
+});
+
+test('the studio does not count against any client allowance', function () {
+    $team = Team::factory()->create();
+    Site::factory()->count(5)->for($team)->create();
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.health')
+        ->set('name', 'RSC Media site')
+        ->set('url', 'rscmedia.co.uk')
+        ->call('addSite')
+        ->assertHasNoErrors();
+
+    expect(Site::query()->studioOwned()->count())->toBe(1);
+});
+
+test('the studio cannot watch the same host twice', function () {
+    Site::factory()->studioOwned()->create(['host' => 'rscmedia.co.uk']);
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.health')
+        ->set('name', 'Again')
+        ->set('url', 'https://rscmedia.co.uk/')
+        ->call('addSite')
+        ->assertHasErrors('url');
+
+    expect(Site::query()->studioOwned()->count())->toBe(1);
+});
+
+test('the admin sees every client site, grouped by client', function () {
+    $braemar = Team::factory()->create(['name' => 'Braemar Joinery']);
+    $glencoe = Team::factory()->create(['name' => 'Glen Coe Cabins']);
+
+    Site::factory()->for($braemar)->create(['name' => 'Braemar main site']);
+    Site::factory()->for($glencoe)->create(['name' => 'Glen Coe booking']);
+    Site::factory()->studioOwned()->create(['name' => 'RSC Media site']);
+
+    $this->actingAs(User::factory()->admin()->create())
+        ->get(route('admin.health'))
+        ->assertOk()
+        ->assertSee('Braemar Joinery')
+        ->assertSee('Braemar main site')
+        ->assertSee('Glen Coe Cabins')
+        ->assertSee('Glen Coe booking')
+        ->assertSee('RSC Media site');
+});
+
+test('a client site cannot be removed or checked from the admin screen', function () {
+    $team = Team::factory()->create();
+    $theirs = Site::factory()->for($team)->create();
+
+    $component = Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.health');
+
+    // Scoped to studioOwned, so posting a client's id finds nothing whatever
+    // the page happens to render.
+    expect(fn () => $component->call('removeSite', $theirs->id))
+        ->toThrow(ModelNotFoundException::class);
+
+    expect(fn () => $component->call('checkNow', $theirs->id))
+        ->toThrow(ModelNotFoundException::class);
+
+    expect($theirs->fresh())->not->toBeNull();
+});
+
+test('a client never sees the studio own sites', function () {
+    $team = Team::factory()->create();
+    $user = memberOf($team, ClientAccess::Full);
+
+    Site::factory()->studioOwned()->create(['name' => 'RSC Media site']);
+    Site::factory()->for($team)->create(['name' => 'Their own site']);
+
+    $this->actingAs($user)
+        ->get(route('client.health'))
+        ->assertOk()
+        ->assertSee('Their own site')
+        ->assertDontSee('RSC Media site');
+});
+
+test('a studio site going down tells the studio, not a client', function () {
+    Notification::fake();
+    siteReplies(503);
+
+    $admin = User::factory()->admin()->create();
+    $client = memberOf(Team::factory()->create(), ClientAccess::Full);
+    $site = Site::factory()->studioOwned()->create();
+
+    app(CheckSite::class)->handle($site);
+    app(CheckSite::class)->handle($site);
+
+    Notification::assertSentTo($admin, SiteIsDown::class);
+    Notification::assertNotSentTo($client, SiteIsDown::class);
+});
+
+test('the studio can download the log for any site, a client only their own', function () {
+    $team = Team::factory()->create();
+    $theirs = Site::factory()->for($team)->create();
+    $ours = Site::factory()->studioOwned()->create();
+
+    SiteCheck::factory()->for($theirs)->create(['checked_at' => now()]);
+    SiteCheck::factory()->for($ours)->create(['checked_at' => now()]);
+
+    $admin = User::factory()->admin()->create();
+
+    $this->actingAs($admin)->get(route('client.health.log', $theirs))->assertOk();
+    $this->actingAs($admin)->get(route('client.health.log', $ours))->assertOk();
+
+    // And the studio's own list stays out of reach of a client.
+    $this->actingAs(memberOf($team, ClientAccess::Full))
+        ->get(route('client.health.log', $ours))
+        ->assertNotFound();
+});
+
+test('the scheduled command checks the studio own sites too', function () {
+    siteReplies(200);
+
+    Site::factory()->studioOwned()->create();
+    Site::factory()->create();
+
+    $this->artisan('sites:check')->assertSuccessful();
+
+    expect(SiteCheck::count())->toBe(2);
 });

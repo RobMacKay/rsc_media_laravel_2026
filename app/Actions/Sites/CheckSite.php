@@ -5,6 +5,7 @@ namespace App\Actions\Sites;
 use App\Enums\SiteStatus;
 use App\Models\Site;
 use App\Models\SiteCheck;
+use App\Models\User;
 use App\Notifications\SiteIsBackUp;
 use App\Notifications\SiteIsDown;
 use App\Support\Sites\Certificate;
@@ -155,7 +156,10 @@ class CheckSite
      */
     private function notify(Site $site, object $notification): void
     {
-        $people = $site->team->members;
+        // A site with no client is the studio's own, so the studio hears about it.
+        $people = $site->team === null
+            ? User::query()->where('is_admin', true)->get()
+            : $site->team->members;
 
         if ($people->isEmpty()) {
             return;

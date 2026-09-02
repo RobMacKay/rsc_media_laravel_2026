@@ -17,7 +17,10 @@ class SiteLogDownloadController extends Controller
      */
     public function __invoke(Request $request, Site $site): StreamedResponse
     {
-        abort_unless($site->team_id === $request->user()->current_team_id, 404);
+        abort_unless(
+            $request->user()->is_admin || $site->team_id === $request->user()->current_team_id,
+            404,
+        );
 
         $filename = $site->host.'-log-'.now()->format('Y-m-d').'.csv';
 

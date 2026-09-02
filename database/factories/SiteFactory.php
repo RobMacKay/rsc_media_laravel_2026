@@ -32,6 +32,16 @@ class SiteFactory extends Factory
     }
 
     /**
+     * Indicate that the site is one of the studio's own, not a client's.
+     */
+    public function studioOwned(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'team_id' => null,
+        ]);
+    }
+
+    /**
      * Indicate that the site was last seen answering.
      */
     public function up(): static
