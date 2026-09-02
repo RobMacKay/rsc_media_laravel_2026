@@ -10,6 +10,12 @@ use Illuminate\Support\Facades\Route;
 
 Route::livewire('/', 'pages::home')->name('home');
 
+// The welcome link from a studio-created account. Signed and time limited, and
+// the page itself refuses anyone who has already chosen a password.
+Route::livewire('set-password/{user}', 'pages::auth.set-password')
+    ->middleware('signed')
+    ->name('password.set');
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('welcome', 'pages::onboarding')->name('onboarding');
 

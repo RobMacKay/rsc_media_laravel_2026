@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Billing\RaiseInvoice;
+use App\Actions\Clients\CreateClient;
 use App\Actions\Billing\RaisePlanInvoices;
 use App\Enums\BillingMode;
 use App\Enums\InvoiceStatus;
@@ -12,9 +13,11 @@ use App\Models\Project;
 use App\Models\StudioSetting;
 use App\Models\Team;
 use App\Models\Ticket;
+use App\Models\User;
 use App\Support\Money;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Auth;
 use Carbon\CarbonInterface;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
@@ -31,6 +34,17 @@ class extends Component {
     public string $filter = 'all';
 
     public bool $formOpen = false;
+
+    /** Whether the panel is showing the new client form rather than the invoice. */
+    public bool $addingClient = false;
+
+    public string $newBusiness = '';
+
+    public string $newContactName = '';
+
+    public string $newContactEmail = '';
+
+    public string $newJobTitle = '';
 
     public ?string $raisedNumber = null;
 
@@ -225,6 +239,7 @@ class extends Component {
     public function toggleForm(): void
     {
         $this->formOpen = ! $this->formOpen;
+        $this->addingClient = false;
         $this->raisedNumber = null;
         $this->teamId ??= $this->clients->first()?->id;
     }
@@ -403,6 +418,59 @@ class extends Component {
     }
 
     /**
+     * Open the panel for a new invoice.
+     */
+    public function openForm(): void
+    {
+        $this->formOpen = true;
+        $this->addingClient = false;
+        $this->raisedNumber = null;
+        $this->resetValidation();
+    }
+
+    /**
+     * Swap the panel between raising an invoice and opening a client account.
+     */
+    public function toggleAddClient(): void
+    {
+        $this->addingClient = ! $this->addingClient;
+        $this->reset('newBusiness', 'newContactName', 'newContactEmail', 'newJobTitle');
+        $this->resetValidation();
+    }
+
+    /**
+     * Open a client account, and select it for the invoice being raised.
+     */
+    public function createClient(): void
+    {
+        $validated = $this->validate([
+            'newBusiness' => ['required', 'string', 'max:255'],
+            'newContactName' => ['required', 'string', 'max:255'],
+            'newContactEmail' => ['required', 'email', 'max:255', Rule::unique(User::class, 'email')],
+            'newJobTitle' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $team = app(CreateClient::class)->handle(
+            business: $validated['newBusiness'],
+            contactName: $validated['newContactName'],
+            contactEmail: $validated['newContactEmail'],
+            jobTitle: $validated['newJobTitle'] ?: null,
+            createdBy: Auth::user(),
+        );
+
+        $this->teamId = $team->id;
+        $this->addingClient = false;
+        $this->reset('newBusiness', 'newContactName', 'newContactEmail', 'newJobTitle');
+
+        unset($this->clients);
+
+        Flux::toast(variant: 'success', text: __(':business is set up. :name has been emailed to set a password.', [
+            'business' => $team->name,
+            'name' => $validated['newContactName'],
+        ]));
+    }
+
+    /**
      * Raise a one-off invoice against a client.
      */
     public function save(): void
@@ -438,15 +506,15 @@ class extends Component {
     $currency = $this->clients->firstWhere('id', $teamId)?->currency ?? \App\Enums\Currency::Base;
 @endphp
 
-<div>
+<div x-data="{ formOpen: @js($formOpen) }">
     <div class="mb-[clamp(20px,2.4vw,30px)] flex flex-wrap items-end justify-between gap-5">
         <div>
             <x-rsc.kicker class="mb-2.5">{{ str(now()->format('F_Y'))->lower() }}</x-rsc.kicker>
             <x-rsc.heading class="!text-[clamp(28px,4vw,46px)]">{{ __('Invoices') }}</x-rsc.heading>
         </div>
 
-        <x-rsc.button wire:click="toggleForm" class="px-[26px] py-3.5">
-            {{ $formOpen ? __('Close form') : __('New invoice') }}
+        <x-rsc.button x-on:click="formOpen = true" wire:click="openForm" class="px-[26px] py-3.5">
+            {{ __('New invoice') }}
         </x-rsc.button>
     </div>
 
@@ -638,97 +706,6 @@ class extends Component {
         </x-rsc.panel>
     @endif
 
-    @if ($formOpen)
-        <x-rsc.panel accent class="mb-[clamp(12px,1.4vw,18px)] animate-rsc-fade !p-[clamp(20px,2.6vw,32px)]">
-            @if ($raisedNumber)
-                <div class="flex flex-col gap-3.5 py-3.5">
-                    <x-rsc.kicker>invoice_sent</x-rsc.kicker>
-                    <div class="font-display text-[clamp(22px,2.6vw,32px)] font-extrabold tracking-[-0.03em]">
-                        {{ __(':number is with the client.', ['number' => $raisedNumber]) }}
-                    </div>
-                    <p class="m-0 max-w-[56ch] text-[15px] text-muted text-pretty">
-                        {{ __('Terms, VAT and bank details came from your settings. It shows in their portal straight away.') }}
-                    </p>
-                    <x-rsc.button variant="outline" wire:click="closeForm" class="self-start !px-[22px] !py-2.5 !text-sm">
-                        {{ __('Back to invoices') }}
-                    </x-rsc.button>
-                </div>
-            @else
-                <form wire:submit="save" class="flex flex-col gap-5">
-                    <x-rsc.kicker tone="muted">one_off_invoice</x-rsc.kicker>
-
-                    <div>
-                        <span class="mb-2 block font-mono text-[11px] text-muted">type</span>
-                        <div class="flex flex-wrap gap-2">
-                            @foreach (\App\Enums\InvoiceType::cases() as $option)
-                                <x-rsc.chip wire:click="$set('type', '{{ $option->value }}')" :active="$type === $option->value" class="!text-[13px] !font-sans">
-                                    {{ $option->label() }}
-                                </x-rsc.chip>
-                            @endforeach
-                        </div>
-                    </div>
-
-                    <div class="grid gap-[18px] [grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
-                        <x-rsc.field label="client" name="teamId">
-                            <x-rsc.select wire:model.live="teamId" class="!py-3">
-                                @foreach ($this->clients as $client)
-                                    <option value="{{ $client->id }}">{{ $client->name }}</option>
-                                @endforeach
-                            </x-rsc.select>
-                        </x-rsc.field>
-
-                        <x-rsc.field label="against_job" name="projectId">
-                            <x-rsc.select wire:model="projectId" class="!py-3">
-                                <option value="">{{ __('Not against a job') }}</option>
-                                @foreach ($this->jobs as $job)
-                                    <option value="{{ $job->id }}">{{ $job->title }}</option>
-                                @endforeach
-                            </x-rsc.select>
-                        </x-rsc.field>
-
-                        <x-rsc.field label="{{ $this->settings->chargesVat() ? 'amount_ex_vat' : 'amount' }}_{{ $currency->symbol() }}" name="amount">
-                            <x-rsc.input type="number" min="0" step="10" wire:model="amount" class="!py-3" />
-                        </x-rsc.field>
-                    </div>
-
-                    <x-rsc.field label="description_on_invoice" name="note">
-                        <x-rsc.input wire:model="note" placeholder="{{ __('Deposit — 40% of agreed fee') }}" class="!py-3" />
-                    </x-rsc.field>
-
-                    <div class="flex flex-wrap gap-x-7 gap-y-2.5 rounded-[14px] border border-line px-[18px] py-4">
-                        @php
-                            $client = $this->clients->firstWhere('id', $teamId);
-                            $vat = $this->settings->effectiveVatRate();
-                            $terms = $client?->effectivePaymentTerms($this->settings) ?? $this->settings->payment_terms_days;
-                        @endphp
-                        @php
-                            $rows = $vat > 0
-                                ? [
-                                    ['ex_vat', $currency->format($amount)],
-                                    ['vat_at_'.rtrim(rtrim(number_format($vat, 1), '0'), '.').'%', $currency->format(round($amount * $vat / 100))],
-                                    ['total', $currency->format(round($amount * (1 + $vat / 100)))],
-                                ]
-                                : [['total', $currency->format($amount)]];
-
-                            $rows[] = ['due', now()->addDays($terms)->format('j M')];
-                        @endphp
-                        @foreach ($rows as [$label, $value])
-                            <span class="flex flex-col gap-1.5">
-                                <span class="font-mono text-[11px] text-muted">{{ $label }}</span>
-                                <span class="font-display text-base font-bold">{{ $value }}</span>
-                            </span>
-                        @endforeach
-                    </div>
-
-                    <div class="flex flex-wrap items-center gap-4">
-                        <x-rsc.button type="submit" class="px-[30px] py-3.5">{{ __('Generate and send') }}</x-rsc.button>
-                        <span class="text-[13px] text-muted">{{ __('Terms, VAT and bank details come from settings.') }}</span>
-                    </div>
-                </form>
-            @endif
-        </x-rsc.panel>
-    @endif
-
     <div class="mb-[18px] flex flex-wrap gap-2">
         <x-rsc.chip wire:click="$set('filter', 'all')" :active="$filter === 'all'">All</x-rsc.chip>
         @foreach (\App\Enums\InvoiceStatus::cases() as $status)
@@ -772,4 +749,128 @@ class extends Component {
             {{ $this->settings->chargesVat() ? __(':total shown, inc VAT', ['total' => $shown]) : __(':total shown', ['total' => $shown]) }}</span>
         </div>
     </div>
+
+    {{-- The invoice form lives in the slide-over at every width, the same panel
+         the ticket detail uses. Rendered unconditionally with the conditional
+         inside, and driven from Alpine state, per the notes on the component. --}}
+    <x-rsc.slide-over open="formOpen"
+                      close="formOpen = false; $wire.closeForm()"
+                      :heading="__('New invoice')">
+        <div class="sticky top-0 z-1 flex items-start gap-4 border-b border-line bg-panel px-[clamp(20px,3vw,30px)] py-5">
+            <div class="min-w-0 flex-1">
+                <x-rsc.kicker tone="muted" class="mb-1.5">{{ $addingClient ? 'new_client' : 'one_off_invoice' }}</x-rsc.kicker>
+                <div class="font-display text-[19px] font-bold tracking-[-0.02em]">
+                    {{ $addingClient ? __('Open a client account') : __('New invoice') }}
+                </div>
+            </div>
+            <button type="button" x-on:click="formOpen = false" wire:click="closeForm"
+                    class="cursor-pointer bg-transparent p-1 font-mono text-[11px] text-muted transition-colors hover:text-brand"
+                    aria-label="{{ __('Close') }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" class="size-5" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="flex flex-col gap-5 px-[clamp(20px,3vw,30px)] py-[clamp(20px,2.6vw,28px)]">
+            @if ($addingClient)
+                @include('pages.admin.partials.new-client-fields')
+
+                <div class="flex flex-wrap items-center gap-3.5 border-t border-line pt-5">
+                    <x-rsc.button wire:click="createClient" class="px-[26px] py-3.5">{{ __('Create and email them') }}</x-rsc.button>
+                    <x-rsc.button variant="outline" wire:click="toggleAddClient" class="!px-5 !py-3 !text-sm">{{ __('Back') }}</x-rsc.button>
+                </div>
+            @else
+                @if ($raisedNumber)
+                    <div class="flex flex-col gap-3.5 py-3.5">
+                        <x-rsc.kicker>invoice_sent</x-rsc.kicker>
+                        <div class="font-display text-[clamp(22px,2.6vw,32px)] font-extrabold tracking-[-0.03em]">
+                            {{ __(':number is with the client.', ['number' => $raisedNumber]) }}
+                        </div>
+                        <p class="m-0 max-w-[56ch] text-[15px] text-muted text-pretty">
+                            {{ __('Terms, VAT and bank details came from your settings. It shows in their portal straight away.') }}
+                        </p>
+                        <x-rsc.button variant="outline" x-on:click="formOpen = false" wire:click="closeForm"
+                                      class="self-start !px-[22px] !py-2.5 !text-sm">
+                            {{ __('Back to invoices') }}
+                        </x-rsc.button>
+                    </div>
+                @else
+                    <form wire:submit="save" class="flex flex-col gap-5">
+                        <div>
+                            <span class="mb-2 block font-mono text-[11px] text-muted">type</span>
+                            <div class="flex flex-wrap gap-2">
+                                @foreach (\App\Enums\InvoiceType::cases() as $option)
+                                    <x-rsc.chip wire:click="$set('type', '{{ $option->value }}')" :active="$type === $option->value" class="!text-[13px] !font-sans">
+                                        {{ $option->label() }}
+                                    </x-rsc.chip>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        <div class="grid gap-[18px] [grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
+                            <x-rsc.field label="client" name="teamId">
+                                <x-rsc.select wire:model.live="teamId" class="!py-3">
+                                    @foreach ($this->clients as $client)
+                                        <option value="{{ $client->id }}">{{ $client->name }}</option>
+                                    @endforeach
+                                </x-rsc.select>
+                                <button type="button" wire:click="toggleAddClient"
+                                        class="mt-2 cursor-pointer bg-transparent p-0 font-mono text-[11px] text-brand">
+                                    {{ __('+ new client') }}
+                                </button>
+                            </x-rsc.field>
+
+                            <x-rsc.field label="against_job" name="projectId">
+                                <x-rsc.select wire:model="projectId" class="!py-3">
+                                    <option value="">{{ __('Not against a job') }}</option>
+                                    @foreach ($this->jobs as $job)
+                                        <option value="{{ $job->id }}">{{ $job->title }}</option>
+                                    @endforeach
+                                </x-rsc.select>
+                            </x-rsc.field>
+
+                            <x-rsc.field label="{{ $this->settings->chargesVat() ? 'amount_ex_vat' : 'amount' }}_{{ $currency->symbol() }}" name="amount">
+                                <x-rsc.input type="number" min="0" step="10" wire:model="amount" class="!py-3" />
+                            </x-rsc.field>
+                        </div>
+
+                        <x-rsc.field label="description_on_invoice" name="note">
+                            <x-rsc.input wire:model="note" placeholder="{{ __('Deposit — 40% of agreed fee') }}" class="!py-3" />
+                        </x-rsc.field>
+
+                        <div class="flex flex-wrap gap-x-7 gap-y-2.5 rounded-[14px] border border-line px-[18px] py-4">
+                            @php
+                                $client = $this->clients->firstWhere('id', $teamId);
+                                $vat = $this->settings->effectiveVatRate();
+                                $terms = $client?->effectivePaymentTerms($this->settings) ?? $this->settings->payment_terms_days;
+                            @endphp
+                            @php
+                                $rows = $vat > 0
+                                    ? [
+                                        ['ex_vat', $currency->format($amount)],
+                                        ['vat_at_'.rtrim(rtrim(number_format($vat, 1), '0'), '.').'%', $currency->format(round($amount * $vat / 100))],
+                                        ['total', $currency->format(round($amount * (1 + $vat / 100)))],
+                                    ]
+                                    : [['total', $currency->format($amount)]];
+
+                                $rows[] = ['due', now()->addDays($terms)->format('j M')];
+                            @endphp
+                            @foreach ($rows as [$label, $value])
+                                <span class="flex flex-col gap-1.5">
+                                    <span class="font-mono text-[11px] text-muted">{{ $label }}</span>
+                                    <span class="font-display text-base font-bold">{{ $value }}</span>
+                                </span>
+                            @endforeach
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-4">
+                            <x-rsc.button type="submit" class="px-[30px] py-3.5">{{ __('Generate and send') }}</x-rsc.button>
+                            <span class="text-[13px] text-muted">{{ __('Terms, VAT and bank details come from settings.') }}</span>
+                        </div>
+                    </form>
+                @endif
+            @endif
+        </div>
+    </x-rsc.slide-over>
 </div>
