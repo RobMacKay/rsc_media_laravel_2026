@@ -7,6 +7,8 @@ use App\Support\Sites\SshResult;
 use Carbon\CarbonInterface;
 use Database\Factories\SiteFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -17,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * A website the studio watches on a client's behalf.
  *
  * @property int $id
- * @property int $team_id
+ * @property int|null $team_id
  * @property string $name
  * @property string $url
  * @property string $host
@@ -41,7 +43,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonInterface|null $down_notified_at
  * @property CarbonInterface|null $created_at
  * @property CarbonInterface|null $updated_at
- * @property-read Team $team
+ * @property-read Team|null $team
  * @property-read Collection<int, SiteCheck> $checks
  */
 #[Fillable([
@@ -79,13 +81,51 @@ class Site extends Model
     ];
 
     /**
-     * Get the client this site belongs to.
+     * Get the client this site belongs to, or null when it is the studio's own.
      *
      * @return BelongsTo<Team, $this>
      */
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
+    }
+
+    /**
+     * Determine whether this is one of the studio's own sites.
+     */
+    public function isStudioOwned(): bool
+    {
+        return $this->team_id === null;
+    }
+
+    /**
+     * Get who the site is listed under.
+     */
+    public function ownerLabel(): string
+    {
+        return $this->team === null ? __('RSC Media') : $this->team->name;
+    }
+
+    /**
+     * Scope to the studio's own sites.
+     *
+     * @param  Builder<$this>  $query
+     */
+    #[Scope]
+    protected function studioOwned(Builder $query): void
+    {
+        $query->whereNull('team_id');
+    }
+
+    /**
+     * Scope to sites belonging to a client.
+     *
+     * @param  Builder<$this>  $query
+     */
+    #[Scope]
+    protected function clientOwned(Builder $query): void
+    {
+        $query->whereNotNull('team_id');
     }
 
     /**

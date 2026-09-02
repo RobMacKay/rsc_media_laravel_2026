@@ -22,6 +22,7 @@ use App\Models\Plan;
 use App\Models\Project;
 use App\Models\ProjectUpdate;
 use App\Models\Proposal;
+use App\Models\Site;
 use App\Models\SiteCheck;
 use App\Models\Team;
 use App\Models\Ticket;
@@ -278,6 +279,12 @@ class DemoClientSeeder extends Seeder
             ['Booking system', 'book.glencoecabins.co.uk', 'up', 5],
         ]);
 
+        // The studio's own, so the admin health screen is not empty.
+        $this->sitesFor(null, [
+            ['RSC Media site', 'rscmedia.co.uk', 'up', 64],
+            ['Client area', 'portal.rscmedia.co.uk', 'up', 64],
+        ]);
+
         $this->sitesFor($fettes, [
             ['Practice website', 'fettesdental.co.uk', 'up', 120],
         ]);
@@ -328,12 +335,13 @@ class DemoClientSeeder extends Seeder
      *
      * @param  array<int, array{0: string, 1: string, 2: string, 3: int}>  $sites
      */
-    private function sitesFor(Team $team, array $sites): void
+    private function sitesFor(?Team $team, array $sites): void
     {
         foreach ($sites as [$name, $host, $state, $certificateDays]) {
             $isUp = $state === 'up';
 
-            $site = $team->sites()->create([
+            $site = Site::create([
+                'team_id' => $team?->id,
                 'name' => $name,
                 'url' => 'https://'.$host,
                 'host' => $host,

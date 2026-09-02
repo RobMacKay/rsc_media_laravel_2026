@@ -1,6 +1,7 @@
 ---
 paths:
   - 'app/Models/**'
+  - app/Models/Site.php
 ---
 
 # Models
@@ -22,3 +23,10 @@ Money decisions follow the same rule as ticket quotes: only `ClientAccess::Full`
 Invoice documents gate on the invoice's own snapshotted `vat_rate` instead, so one raised while registered keeps its VAT line if the studio later deregisters.
 
 Tests that expect VAT on an invoice must set `vat_number` as well as `vat_registered`.
+
+## A site with no team is the studio's own
+`sites.team_id` is nullable: null means the studio owns it rather than a client. Use the `studioOwned()` and `clientOwned()` scopes rather than testing the column, and `ownerLabel()` for display.
+
+The admin screen (`pages::admin.health`) is read-only over client sites by design — the studio watches them but does not manage them. That is enforced by scoping every write to `studioOwned()` (`Site::query()->studioOwned()->findOrFail(...)`), not by hiding buttons, so posting a client's id finds nothing.
+
+Consequences worth remembering: the client site allowance counts `team->sites()` so studio sites never eat into it; `CheckSite` notifies `is_admin` users when there is no team; and the log download allows admins any site but a client only their own. SQL treats nulls as distinct, so the `(team_id, host)` unique index does not stop the studio adding the same host twice — that is checked in the component.
