@@ -70,15 +70,13 @@ class extends Component {
         ['06', 'Consultancy & advisory', 'A second opinion before you commit — including when the answer is don\'t build it.'],
     ];
 
-    $reasons = [
-        ['a', 'You talk to the builder', 'No account managers relaying messages.'],
-        ['b', 'Fits you, not a template', 'We build around how you already work.'],
-        ['c', 'Built to grow', 'The next feature is a conversation, not a rebuild.'],
-        ['d', 'Your team is trained', 'So the new tool gets used, not quietly avoided.'],
-        ['e', 'Clear about cost', 'Scoped in stages, prices agreed up front.'],
-        ['f', 'We don\'t disappear', 'Hosting, updates and small changes, ongoing.'],
-        ['g', 'You own it', 'Code, hosting and accounts stay in your name.'],
-        ['h', 'Documented handover', 'You get the documentation, not just a zip file.'],
+    $objections = [
+        ['"Will I be talking to a salesman?"', 'No. You get me, Ross, on the phone and on the email. The person who builds it is the person you speak to, start to finish.'],
+        ['"I don\'t know what I need"', 'That\'s normal, and it\'s my job, not yours. Tell me what takes too long or goes wrong too often. I\'ll tell you whether it\'s worth fixing.'],
+        ['"Will it cost more than you said?"', 'You get one price in writing before anything starts. If the job grows, I come and ask you first. No surprise bills.'],
+        ['"My staff won\'t get on with it"', 'Then it\'s failed. I sit with whoever\'s using it, show them properly, and write it down in plain English so nobody\'s guessing.'],
+        ['"What if you vanish?"', 'Everything\'s in your name — the website, the accounts, the lot. You could hand it to someone else tomorrow and they\'d have what they need.'],
+        ['"And after it\'s built?"', 'I\'m still here. Something\'s gone squiffy, you want a change, you just ask. That\'s what the monthly plans below are for.'],
     ];
 
     $steps = [
@@ -258,7 +256,7 @@ class extends Component {
             <div class="mb-[clamp(28px,4vw,56px)] flex flex-wrap items-end justify-between gap-6">
                 <div>
                     <x-rsc.kicker class="mb-3.5 !tracking-[0.1em] !text-xs">01 / what_we_build</x-rsc.kicker>
-                    <h2 class="m-0 max-w-[16ch] font-display text-[clamp(30px,5vw,72px)] font-extrabold leading-none tracking-[-0.04em]">
+                    <h2 class="m-0 max-w-[18ch] font-display text-[clamp(30px,5vw,72px)] font-extrabold leading-none tracking-[-0.04em]">
                         {{ __('Software, and the structure underneath it') }}
                     </h2>
                 </div>
@@ -289,18 +287,29 @@ class extends Component {
 
         <section id="why" class="px-[clamp(18px,5vw,64px)] py-[clamp(56px,8vw,120px)]">
             <x-rsc.kicker class="mb-3.5 !tracking-[0.1em] !text-xs">02 / why_us</x-rsc.kicker>
-            <h2 class="m-0 mb-[clamp(30px,4vw,56px)] max-w-[18ch] font-display text-[clamp(30px,5vw,72px)] font-extrabold leading-none tracking-[-0.04em]">
-                {{ __('Small enough to care, structured enough to deliver') }}
+            <h2 class="m-0 mb-5 max-w-[20ch] font-display text-[clamp(30px,5vw,72px)] font-extrabold leading-none tracking-[-0.04em]">
+                {{ __('You don\'t need to understand any of it') }}
             </h2>
+            <p class="m-0 mb-[clamp(34px,4.4vw,64px)] max-w-[46ch] text-[clamp(16px,1.5vw,20px)] leading-relaxed text-muted text-pretty">
+                {{ __('You tell me what\'s driving you mad. I go away, work out how to fix it, and come back and explain it in normal words. That\'s the whole arrangement.') }}
+            </p>
 
-            <div class="grid gap-[clamp(12px,1.4vw,18px)] [grid-template-columns:repeat(auto-fit,minmax(250px,1fr))]">
-                @foreach ($reasons as [$mark, $title, $body])
-                    <div class="rounded-2xl border border-line bg-ink p-[clamp(22px,2.6vw,34px)]">
-                        <div class="mb-4 font-mono text-[11px] text-brand">{{ $mark }}</div>
-                        <h4 class="m-0 mb-2 font-display text-[19px] font-bold tracking-[-0.02em]">{{ $title }}</h4>
-                        <p class="m-0 text-sm text-muted">{{ $body }}</p>
+            <div class="grid max-w-[1180px] gap-y-0 gap-x-[clamp(34px,5vw,80px)] [grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr))]">
+                @foreach ($objections as [$question, $answer])
+                    <div class="border-t border-line py-[clamp(24px,2.8vw,36px)]">
+                        <h3 class="m-0 mb-2.5 font-display text-[clamp(21px,2.2vw,28px)] font-bold tracking-[-0.025em]">{{ __($question) }}</h3>
+                        <p class="m-0 max-w-[44ch] text-base leading-relaxed text-muted text-pretty">{{ __($answer) }}</p>
                     </div>
                 @endforeach
+            </div>
+
+            <div class="mt-[clamp(8px,1vw,14px)] max-w-[1180px] border-t border-line pt-[clamp(26px,3vw,40px)]">
+                <p class="m-0 max-w-[34ch] font-display text-[clamp(19px,2vw,26px)] font-bold leading-[1.4] tracking-[-0.02em] text-pretty">
+                    {{ __('Still not sure? Ring me and describe the problem. It\'s a chat, not a pitch.') }}
+                </p>
+                <x-rsc.button as="a" href="#contact" class="mt-[22px] !px-[30px] !py-[15px] !text-base">
+                    {{ __('Tell me what\'s annoying you') }}
+                </x-rsc.button>
             </div>
         </section>
 

@@ -65,6 +65,16 @@ test('an unknown topic is rejected', function () {
         ->assertHasErrors('topic');
 });
 
+test('the why_us section answers the common objections', function () {
+    $this->get(route('home'))
+        ->assertOk()
+        ->assertSee('You don&#039;t need to understand any of it', escape: false)
+        ->assertSee('Will I be talking to a salesman?', escape: false)
+        ->assertSee('And after it&#039;s built?', escape: false)
+        ->assertSee('Tell me what&#039;s annoying you', escape: false)
+        ->assertDontSee('Small enough to care');
+});
+
 test('guests are offered a login link', function () {
     $this->get(route('home'))
         ->assertOk()
