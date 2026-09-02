@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\ChaseInvoices;
 use App\Console\Commands\CheckSites;
 use App\Console\Commands\RaisePlanInvoices;
 use App\Models\TeamInvitation;
@@ -26,3 +27,11 @@ Schedule::command(CheckSites::class)
     ->everyFifteenMinutes()
     ->withoutOverlapping()
     ->description('Check monitored sites');
+
+// Unpaid invoices, once a day. Marks anything past its date as overdue and
+// sends whichever reminder stage is now due; each stage goes out once, and
+// there is nothing automatic after a fortnight.
+Schedule::command(ChaseInvoices::class)
+    ->dailyAt('08:00')
+    ->withoutOverlapping()
+    ->description('Chase unpaid invoices');

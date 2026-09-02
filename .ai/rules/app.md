@@ -84,3 +84,14 @@ The account is created with `Str::password(32)` that nobody ever sees, plus `mus
 Setting the password signs them in and verifies the email (the studio typed the address and the person just proved they read it), and they land in the onboarding wizard because `onboarded_at` is still null.
 
 Note when testing signed URLs by hand: the signature covers scheme and host, so a link generated with `APP_URL=https` 403s when opened over http locally.
+
+## Overdue is derived; reminders send once per stage and then stop
+`Invoice::isOverdue()` is derived — outstanding, **sent** (not a draft), and past `due_on` — so screens are right the moment a date passes rather than whenever `invoices:chase` last ran. Read it, not `status === Overdue`; the stored status exists for filtering and is only written by the nightly command. The admin money tiles use the derived check for exactly this reason.
+
+A draft is never late: it has not gone to the client. That is `InvoiceStatus::hasBeenSent()`, and both `isOverdue()` and `reminderDue()` gate on it.
+
+Reminders climb `App\Enums\InvoiceReminder` — DueSoon (-3 days), JustOverdue (+1), Chasing (+7), FinalNotice (+14) — and **there is deliberately nothing after that**: past a fortnight a chase should come from a person. `dueAfter()` walks the stages newest-first so an invoice found a month late jumps to FinalNotice instead of replaying the earlier ones. `reminder_stage` on the invoice is what makes each stage send once no matter how often the command runs.
+
+Recipients are `team.billing_email` if set, else members whose access `canSeeBilling()` — never everyone, since a tickets-only member has no business being chased for money. An account with nobody to email is skipped without staging, so the reminder goes out once somebody can receive it.
+
+`reminders_paused_at` mutes one invoice (the "mute" control on the admin list); `studio_settings.invoice_reminders` turns the emails off entirely while still marking things overdue.

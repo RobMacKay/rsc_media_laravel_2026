@@ -99,8 +99,10 @@ class extends Component {
     #[Computed]
     public function money(): array
     {
-        $overdue = $this->allInvoices->where('status', InvoiceStatus::Overdue);
-        $sent = $this->allInvoices->where('status', InvoiceStatus::Sent);
+        // Derived, not the stored status: an invoice that went past its date
+        // an hour ago should show here without waiting for the nightly run.
+        $overdue = $this->allInvoices->filter(fn (Invoice $i) => $i->isOverdue());
+        $sent = $this->allInvoices->filter(fn (Invoice $i) => $i->status->isOutstanding() && ! $i->isOverdue());
         $draft = $this->allInvoices->where('status', InvoiceStatus::Draft);
         $paid = $this->allInvoices->where('status', InvoiceStatus::Paid);
 
@@ -418,6 +420,24 @@ class extends Component {
     }
 
     /**
+     * Silence or resume the automatic reminders on one invoice.
+     */
+    public function toggleReminders(int $invoiceId): void
+    {
+        $invoice = Invoice::findOrFail($invoiceId);
+
+        $invoice->update([
+            'reminders_paused_at' => $invoice->reminders_paused_at ? null : now(),
+        ]);
+
+        $this->refreshBilling();
+
+        Flux::toast(variant: 'success', text: $invoice->reminders_paused_at
+            ? __('Reminders paused on :number.', ['number' => $invoice->number])
+            : __('Reminders back on for :number.', ['number' => $invoice->number]));
+    }
+
+    /**
      * Open the panel for a new invoice.
      */
     public function openForm(): void
@@ -726,14 +746,30 @@ class extends Component {
                         <span>
                             <span class="block font-display text-[15px] font-bold tracking-[-0.015em]">{{ $invoice->team->name }}</span>
                             <span class="mt-[3px] block text-xs text-muted">{{ $invoice->note }}</span>
+                            @if ($invoice->remindersExhausted())
+                                <span class="mt-1 block font-mono text-[10px] text-warm">{{ __('reminders finished — worth a call') }}</span>
+                            @elseif ($invoice->reminder_stage)
+                                <span class="mt-1 block font-mono text-[10px] text-muted">{{ __('last chased :when', ['when' => $invoice->last_reminded_at?->diffForHumans()]) }}</span>
+                            @endif
                         </span>
                         <span class="font-mono text-[11px] {{ $invoice->type === \App\Enums\InvoiceType::Plan ? 'text-brand' : 'text-muted' }}">{{ $invoice->type->label() }}</span>
-                        <span class="text-[13px] {{ $invoice->status === \App\Enums\InvoiceStatus::Overdue ? 'text-warm' : 'text-muted' }}">{{ $invoice->due_on->format('j M') }}</span>
+                        <span class="text-[13px] {{ $invoice->isOverdue() ? 'text-warm' : 'text-muted' }}">
+                            {{ $invoice->due_on->format('j M') }}
+                            @if ($invoice->isOverdue())
+                                <span class="mt-[3px] block font-mono text-[10px]">{{ trans_choice('{1}1 day late|[2,*]:count days late', $invoice->daysPastDue(), ['count' => $invoice->daysPastDue()]) }}</span>
+                            @endif
+                        </span>
                         <span class="font-display text-[15px] font-bold">{{ $invoice->money($invoice->total()) }}</span>
                         <span class="flex items-center gap-2.5">
                             <x-rsc.pill :tone="$invoice->status->tone()">{{ str($invoice->status->label())->lower() }}</x-rsc.pill>
                             @if ($invoice->status->isOutstanding())
-                                <button type="button" wire:click="markPaid({{ $invoice->id }})" class="cursor-pointer font-mono text-[10px] text-brand">{{ __('mark paid') }}</button>
+                                <span class="flex flex-col items-start gap-1">
+                                    <button type="button" wire:click="markPaid({{ $invoice->id }})" class="cursor-pointer font-mono text-[10px] text-brand">{{ __('mark paid') }}</button>
+                                    <button type="button" wire:click="toggleReminders({{ $invoice->id }})"
+                                            class="cursor-pointer font-mono text-[10px] {{ $invoice->reminders_paused_at ? 'text-warm' : 'text-muted' }}">
+                                        {{ $invoice->reminders_paused_at ? __('reminders off') : __('mute') }}
+                                    </button>
+                                </span>
                             @endif
                         </span>
                     </div>
