@@ -25,6 +25,7 @@ use Illuminate\Support\Carbon;
  * @property int $payment_terms_days
  * @property int $site_limit
  * @property float $late_fee_percent
+ * @property bool $invoice_reminders
  * @property bool $vat_registered
  * @property string|null $vat_number
  * @property float $vat_rate
@@ -39,7 +40,7 @@ use Illuminate\Support\Carbon;
 #[Fillable([
     'company_name', 'company_number', 'address', 'email', 'phone', 'website', 'welcome_video_url',
     'hour_rate', 'day_rate', 'day_length', 'minimum_charge', 'out_of_hours_uplift',
-    'payment_terms_days', 'site_limit', 'late_fee_percent', 'vat_registered', 'vat_number', 'vat_rate',
+    'payment_terms_days', 'site_limit', 'late_fee_percent', 'invoice_reminders', 'vat_registered', 'vat_number', 'vat_rate',
     'account_name', 'bank_name', 'sort_code', 'account_number', 'reference_format',
 ])]
 class StudioSetting extends Model
@@ -60,6 +61,7 @@ class StudioSetting extends Model
         'payment_terms_days' => 21,
         'site_limit' => 5,
         'late_fee_percent' => 2,
+        'invoice_reminders' => true,
         'vat_registered' => true,
         'vat_rate' => 20,
         'reference_format' => 'RSC-{invoice}',
@@ -132,6 +134,7 @@ class StudioSetting extends Model
             'day_length' => 'float',
             'minimum_charge' => 'float',
             'late_fee_percent' => 'float',
+            'invoice_reminders' => 'boolean',
             'vat_registered' => 'boolean',
             'vat_rate' => 'float',
         ];

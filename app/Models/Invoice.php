@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\Currency;
+use App\Enums\InvoiceReminder;
 use App\Enums\InvoiceStatus;
 use App\Enums\InvoiceType;
 use Database\Factories\InvoiceFactory;
@@ -29,6 +30,9 @@ use Illuminate\Support\Carbon;
  * @property Carbon $due_on
  * @property InvoiceStatus $status
  * @property Carbon|null $paid_at
+ * @property InvoiceReminder|null $reminder_stage
+ * @property Carbon|null $last_reminded_at
+ * @property Carbon|null $reminders_paused_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Team $team
@@ -38,6 +42,7 @@ use Illuminate\Support\Carbon;
 #[Fillable([
     'number', 'team_id', 'project_id', 'ticket_id', 'type', 'note', 'amount',
     'vat_rate', 'currency', 'issued_on', 'due_on', 'status', 'paid_at',
+    'reminder_stage', 'last_reminded_at', 'reminders_paused_at',
 ])]
 class Invoice extends Model
 {
@@ -143,10 +148,61 @@ class Invoice extends Model
 
     /**
      * Determine whether this invoice is past its due date and still unpaid.
+     *
+     * Derived rather than read off the status, so it is right the moment the
+     * date passes rather than whenever the daily command last ran.
      */
     public function isOverdue(): bool
     {
-        return $this->status->isOutstanding() && $this->due_on->isPast();
+        return $this->status->isOutstanding()
+            && $this->status->hasBeenSent()
+            && $this->due_on->isPast();
+    }
+
+    /**
+     * Get how many days past its due date this invoice is. Negative until then.
+     */
+    public function daysPastDue(): int
+    {
+        return (int) now()->startOfDay()->diffInDays($this->due_on->startOfDay(), false) * -1;
+    }
+
+    /**
+     * Get the reminder stage that is due to go out, if any.
+     */
+    public function reminderDue(): ?InvoiceReminder
+    {
+        if (! $this->status->isOutstanding() || ! $this->status->hasBeenSent()) {
+            return null;
+        }
+
+        if ($this->reminders_paused_at !== null) {
+            return null;
+        }
+
+        $stage = InvoiceReminder::dueAfter($this->daysPastDue());
+
+        return $stage?->isAfter($this->reminder_stage) ? $stage : null;
+    }
+
+    /**
+     * Determine whether this invoice has run out of automatic reminders.
+     */
+    public function remindersExhausted(): bool
+    {
+        return $this->status->isOutstanding()
+            && $this->reminder_stage === InvoiceReminder::FinalNotice;
+    }
+
+    /**
+     * Scope to invoices that are past their due date and still unpaid.
+     *
+     * @param  Builder<$this>  $query
+     */
+    #[Scope]
+    protected function overdue(Builder $query): void
+    {
+        $query->where('status', '!=', InvoiceStatus::Paid)->whereDate('due_on', '<', now());
     }
 
     /**
@@ -164,6 +220,9 @@ class Invoice extends Model
             'issued_on' => 'date',
             'due_on' => 'date',
             'paid_at' => 'datetime',
+            'reminder_stage' => InvoiceReminder::class,
+            'last_reminded_at' => 'datetime',
+            'reminders_paused_at' => 'datetime',
         ];
     }
 }

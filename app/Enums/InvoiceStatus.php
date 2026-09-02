@@ -37,4 +37,14 @@ enum InvoiceStatus: string
     {
         return $this !== self::Paid;
     }
+
+    /**
+     * Determine whether the invoice has actually gone to the client.
+     *
+     * A draft has not, so it can never be late however old it is.
+     */
+    public function hasBeenSent(): bool
+    {
+        return $this !== self::Draft;
+    }
 }

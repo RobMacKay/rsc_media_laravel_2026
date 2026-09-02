@@ -51,7 +51,8 @@ class extends Component {
             'company_name', 'company_number', 'address', 'email', 'phone', 'website',
             'welcome_video_url',
             'hour_rate', 'day_rate', 'day_length', 'minimum_charge', 'out_of_hours_uplift',
-            'payment_terms_days', 'late_fee_percent', 'vat_registered', 'vat_number', 'vat_rate',
+            'payment_terms_days', 'late_fee_percent', 'invoice_reminders',
+            'vat_registered', 'vat_number', 'vat_rate',
             'account_name', 'bank_name', 'sort_code', 'account_number', 'reference_format',
         ]);
 
@@ -285,6 +286,7 @@ class extends Component {
             'studio.out_of_hours_uplift' => ['required', 'integer', 'min:0'],
             'studio.payment_terms_days' => ['required', 'integer', 'min:0'],
             'studio.late_fee_percent' => ['required', 'numeric', 'min:0'],
+            'studio.invoice_reminders' => ['boolean'],
             'studio.vat_registered' => ['boolean'],
             'studio.vat_number' => ['nullable', 'string', 'max:255'],
             'studio.vat_rate' => ['required', 'numeric', 'min:0'],
@@ -421,6 +423,18 @@ class extends Component {
                     <x-rsc.input type="number" min="0" step="0.5" wire:model="studio.late_fee_percent" class="!py-3" />
                 </x-rsc.field>
             </div>
+
+            <label class="mt-[18px] flex cursor-pointer items-start gap-2.5 border-t border-line pt-4 text-[13px] text-muted">
+                <input type="checkbox" wire:model.live="studio.invoice_reminders" class="mt-0.5 size-4" style="accent-color: var(--rsc-accent)">
+                <span>
+                    <span class="block text-body">{{ __('Chase unpaid invoices automatically') }}</span>
+                    <span class="mt-1 block">
+                        {{ ($studio['invoice_reminders'] ?? false)
+                            ? __('A nudge three days before it falls due, then at one, seven and fourteen days late. Each goes out once, and nothing automatic after that. Mute a single invoice from the list.')
+                            : __('Nothing is sent. Invoices are still marked overdue so you can see them.') }}
+                    </span>
+                </span>
+            </label>
         </x-rsc.panel>
 
         <x-rsc.panel>
