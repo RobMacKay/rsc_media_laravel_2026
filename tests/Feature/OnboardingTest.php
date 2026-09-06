@@ -204,13 +204,13 @@ test('the intro video only appears when the studio has set one', function () {
 
     Livewire::actingAs($user)
         ->test('pages::onboarding')
-        ->assertDontSee('A quick hello from Ross');
+        ->assertDontSee('A quick hello from Rob');
 
     StudioSetting::current()->update(['welcome_video_url' => 'https://player.vimeo.com/video/76979871']);
 
     Livewire::actingAs($user)
         ->test('pages::onboarding')
-        ->assertSee('A quick hello from Ross');
+        ->assertSee('A quick hello from Rob');
 });
 
 test('an invite carries the name and access the inviter chose', function () {
