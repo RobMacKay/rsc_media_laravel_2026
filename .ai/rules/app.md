@@ -119,3 +119,12 @@ The trap field is `sr-only` + `aria-hidden` + `tabindex=-1`, not `display:none`:
 On plain forms the timestamp is an **encrypted** hidden input, so the clock cannot be wound back by editing the page. On the Livewire enquiry form it is `#[Locked]` — a plain public Livewire property can be set by whoever is on the other end, so without the attribute a script would simply post an hour-old timestamp and walk past the check.
 
 Tests: `typedByHand()` adds a stamp aged a minute for plain form posts, and `enquiryForm()` opens the Livewire form and travels past the minimum. Any new test that posts to a public form needs one of them, or it is refused for being impossibly fast.
+
+## Email confirmation is on, and every email needs a queue worker
+`User` implements `MustVerifyEmail`, so registering fires the confirmation link and the `verified` middleware on the client and admin groups is live. Before this the contract was commented out: the Fortify feature and routes existed but nothing was ever sent and `verified` waved everyone through.
+
+The wording is overridden with `VerifyEmail::toMailUsing()` in `FortifyServiceProvider::configureVerificationEmail()` — Laravel's stock copy is anonymous, and this is the first thing a new client gets from us.
+
+Studio-opened accounts never get a confirmation email: `pages::auth.set-password` stamps `email_verified_at` when they choose a password, because the studio typed the address and the person proved they read it. The backfill migration honours that by skipping anyone with `must_set_password`.
+
+**Nothing this app emails leaves the server without a queue worker.** Every notification is `ShouldQueue` and `QUEUE_CONNECTION=database`, so with no worker the jobs simply pile up in the `jobs` table with no error anywhere — that includes the confirmation link, ticket alerts, enquiry alerts, invoice chases and site-down warnings. The scheduler being on is not enough: `sites:check` and `invoices:chase` only queue the mail. Forge needs the worker and a real `MAIL_MAILER` as well as the scheduler.
