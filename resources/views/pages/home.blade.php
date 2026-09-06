@@ -562,6 +562,8 @@ class extends Component {
                         <a href="{{ $href }}" class="text-muted no-underline hover:text-body">{{ $label }}</a>
                     @endforeach
                     <a href="{{ $portal['url'] }}" class="text-muted no-underline hover:text-body">{{ $portal['label'] }}</a>
+                    <a href="{{ route('legal.privacy') }}" class="text-muted no-underline hover:text-body" wire:navigate>privacy</a>
+                    <a href="{{ route('legal.cookies') }}" class="text-muted no-underline hover:text-body" wire:navigate>cookies</a>
                 </div>
 
                 <div class="font-mono text-xs text-muted">© {{ now()->year }} RSC Media Ltd</div>

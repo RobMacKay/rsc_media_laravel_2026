@@ -65,6 +65,10 @@
 
             <footer class="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 border-t border-line px-[clamp(16px,4vw,44px)] py-[22px] font-mono text-[11px] text-muted">
                 <span>{{ $footerLabel }}</span>
+                <span class="flex flex-wrap gap-x-5 gap-y-1">
+                    <a href="{{ route('legal.privacy') }}" class="text-muted no-underline hover:text-body" wire:navigate>privacy</a>
+                    <a href="{{ route('legal.cookies') }}" class="text-muted no-underline hover:text-body" wire:navigate>cookies</a>
+                </span>
                 @isset($footerAction)
                     {{ $footerAction }}
                 @else

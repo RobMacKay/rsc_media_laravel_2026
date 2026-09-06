@@ -395,7 +395,7 @@ class extends Component {
         @if ($this->settings->welcome_video_url)
             <x-rsc.panel padded="false" class="mb-[clamp(18px,2.2vw,28px)] overflow-hidden">
                 <div class="relative aspect-video bg-ink">
-                    <iframe src="{{ $this->settings->welcome_video_url }}"
+                    <iframe src="{{ $this->settings->welcomeVideoEmbedUrl() }}"
                             title="{{ __('Introduction from Rob') }}"
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                             allowfullscreen
