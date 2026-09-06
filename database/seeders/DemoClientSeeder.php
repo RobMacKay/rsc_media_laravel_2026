@@ -17,6 +17,7 @@ use App\Enums\TicketStatus;
 use App\Enums\TicketType;
 use App\Enums\UpdateKind;
 use App\Models\Attachment;
+use App\Models\Enquiry;
 use App\Models\Invoice;
 use App\Models\Plan;
 use App\Models\Project;
@@ -289,6 +290,8 @@ class DemoClientSeeder extends Seeder
             ['Practice website', 'fettesdental.co.uk', 'up', 120],
         ]);
 
+        $this->enquiries();
+
         Attachment::insert([
             $this->file($vatTicket, $ross, 'quote-vat-fix-estimate.pdf', 'PDF', true),
             $this->file($vatTicket, $kirsty, 'vat-rate-config.png', 'PNG', true),
@@ -327,6 +330,36 @@ class DemoClientSeeder extends Seeder
         $this->updates($braemar, $tracker);
 
         $this->invoices($braemar, $glencoe, $fettes, $tracker, $booking, $rebuild, $carePlan);
+    }
+
+    /**
+     * Seed the contact form's inbox, so the enquiries screen has something in it.
+     */
+    private function enquiries(): void
+    {
+        $rows = [
+            ['Kirsty Munro', 'kirsty@braemarjoinery.co.uk', 'Braemar Joinery', 'existing',
+                'Our booking form drops the phone number when someone picks a date on a phone. Third person to mention it this month.', 2, null],
+            ['Alan Petrie', 'alan@petrieplant.co.uk', 'Petrie Plant Hire', 'app',
+                'We are quoting hires off a whiteboard and it is falling over. Wondering what something proper would cost.', 5, null],
+            ['Morag Bell', 'morag@glencoelodges.co.uk', null, 'advice',
+                'Just after a second opinion on a quote we have had from someone else. Happy to pay for the hour.', 9, 7],
+            ['Douglas Reid', 'douglas@reidjoinery.co.uk', 'Reid Joinery', 'site',
+                'Our site is five years old and looks it. What would a rebuild involve?', 21, 18],
+        ];
+
+        foreach ($rows as [$name, $email, $company, $topic, $message, $daysAgo, $handledDaysAgo]) {
+            Enquiry::create([
+                'name' => $name,
+                'email' => $email,
+                'company' => $company,
+                'topic' => $topic,
+                'message' => $message,
+                'handled_at' => $handledDaysAgo === null ? null : now()->subDays($handledDaysAgo),
+                'created_at' => now()->subDays($daysAgo),
+                'updated_at' => now()->subDays($daysAgo),
+            ]);
+        }
     }
 
     /**
