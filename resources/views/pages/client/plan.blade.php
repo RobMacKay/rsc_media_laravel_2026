@@ -37,7 +37,7 @@ class extends Component {
     /**
      * Ask the studio to move this client onto a different plan.
      *
-     * Nothing is charged here: the request is recorded and Ross confirms it by email.
+     * Nothing is charged here: the request is recorded and Rob confirms it by email.
      */
     public function request(int $planId): void
     {
@@ -75,7 +75,7 @@ class extends Component {
                 {{ $current ? __('Moving you to :plan.', ['plan' => $requested]) : __(':plan requested.', ['plan' => $requested]) }}
             </div>
             <p class="mt-2.5 max-w-[56ch] text-[15px] text-muted text-pretty">
-                {{ __('Nothing is charged yet. Ross will confirm the change by email, and it starts on the first of next month.') }}
+                {{ __('Nothing is charged yet. Rob will confirm the change by email, and it starts on the first of next month.') }}
             </p>
         </x-rsc.panel>
     @endif

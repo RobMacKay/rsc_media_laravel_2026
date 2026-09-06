@@ -41,6 +41,6 @@
 
     <footer class="flex flex-wrap items-center justify-between gap-x-[30px] gap-y-2.5 border-t border-line px-[clamp(16px,4vw,44px)] py-5 font-mono text-[11px] text-muted">
         <span>{{ __('RSC Media — client area') }}</span>
-        <span>{{ __('Locked out? WhatsApp Ross on 07700 900 118') }}</span>
+        <span>{{ __('Locked out? WhatsApp Rob on :phone', ['phone' => app(\App\Models\StudioSetting::class)->phone]) }}</span>
     </footer>
 </x-layouts::rsc.plain>

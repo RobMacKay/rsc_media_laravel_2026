@@ -170,7 +170,7 @@ class extends Component {
 
         unset($this->items);
 
-        Flux::toast(variant: 'success', text: __('Signed off — Ross will be in touch to book the kick-off.'));
+        Flux::toast(variant: 'success', text: __('Signed off — Rob will be in touch to book the kick-off.'));
     }
 }; ?>
 
@@ -198,7 +198,7 @@ class extends Component {
                     <x-rsc.kicker>{{ $proposedReference }}</x-rsc.kicker>
                     <div class="font-display text-[clamp(22px,2.6vw,32px)] font-extrabold tracking-[-0.03em]">{{ __('With us now.') }}</div>
                     <p class="m-0 max-w-[52ch] text-[15px] text-muted">
-                        {{ __('Ross will read it and write up scope, phases and a price. You\'ll get an email when it\'s ready to sign off.') }}
+                        {{ __('Rob will read it and write up scope, phases and a price. You\'ll get an email when it\'s ready to sign off.') }}
                     </p>
                     <x-rsc.button variant="outline" wire:click="closePropose" class="self-start !px-[22px] !py-2.5 !text-sm">
                         {{ __('Back to projects') }}
