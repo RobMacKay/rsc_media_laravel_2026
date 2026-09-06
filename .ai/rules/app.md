@@ -110,3 +110,12 @@ Two traps, both hit for real while building this:
 - `Livewire.hook('commit')` registered from inside an Alpine `x-data` on a `wire:ignore` div does not reliably fire. The submit-capture approach in `components/rsc/turnstile.blade.php` replaced it.
 
 Test with Cloudflare's keys: site `1x00000000000000000000AA` passes, `3x00000000000000000000FF` forces the visible challenge, secret `1x0000000000000000000000000000000AA` passes and `2x0000000000000000000000000000000AA` fails.
+
+## The honeypot and the clock, in front of Turnstile
+`App\Support\PublicForms::ROUTES` is the one list of unauthenticated forms; both `VerifyHoneypot` and `VerifyTurnstile` read it, so a new public form is guarded by adding it there. `TIMED_ROUTES` is the narrower list that also refuses a submission returned in under `Honeypot::MIN_SECONDS` — registration only. Login is deliberately not timed: a saved password gets someone through in well under a second, and turning a returning client away costs more than the spam it stops.
+
+The trap field is `sr-only` + `aria-hidden` + `tabindex=-1`, not `display:none`: some bots skip hidden fields. It must stay clipped rather than pushed off-screen with a negative offset — an absolutely positioned element with no positioned ancestor can widen the page.
+
+On plain forms the timestamp is an **encrypted** hidden input, so the clock cannot be wound back by editing the page. On the Livewire enquiry form it is `#[Locked]` — a plain public Livewire property can be set by whoever is on the other end, so without the attribute a script would simply post an hour-old timestamp and walk past the check.
+
+Tests: `typedByHand()` adds a stamp aged a minute for plain form posts, and `enquiryForm()` opens the Livewire form and travels past the minimum. Any new test that posts to a public form needs one of them, or it is refused for being impossibly fast.

@@ -3,11 +3,14 @@
 use App\Models\Enquiry;
 use App\Models\Plan;
 use App\Models\User;
+use App\Http\Middleware\VerifyHoneypot;
 use App\Rules\TurnstileToken;
+use App\Support\Honeypot;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -31,6 +34,27 @@ class extends Component {
     /** Proof the form was filled in by a person, set by the Turnstile widget. */
     public string $turnstileToken = '';
 
+    /** The field no person can see. Anything in it came from a script. */
+    public string $websiteUrl = '';
+
+    /**
+     * When this form was handed out.
+     *
+     * Locked, and that is the whole point: a public Livewire property can be
+     * set by whoever is on the other end, so without this a script would just
+     * post a timestamp from an hour ago and stroll past the check.
+     */
+    #[Locked]
+    public ?int $formOpenedAt = null;
+
+    /**
+     * Note when the page was opened, so we can tell how fast it came back.
+     */
+    public function mount(): void
+    {
+        $this->formOpenedAt = now()->getTimestamp();
+    }
+
     /**
      * Get the support plans advertised on the public site.
      *
@@ -47,6 +71,12 @@ class extends Component {
      */
     public function send(): void
     {
+        if ($this->websiteUrl !== '' || $this->cameBackTooFast()) {
+            $this->addError('websiteUrl', __(VerifyHoneypot::MESSAGE));
+
+            return;
+        }
+
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
@@ -64,6 +94,14 @@ class extends Component {
 
         $this->reset('name', 'email', 'company', 'message', 'turnstileToken');
         $this->sent = true;
+    }
+
+    /**
+     * Determine whether the form came back faster than anyone could type it.
+     */
+    private function cameBackTooFast(): bool
+    {
+        return now()->getTimestamp() - (int) $this->formOpenedAt < Honeypot::MIN_SECONDS;
     }
 }; ?>
 
@@ -501,6 +539,8 @@ class extends Component {
                                                 placeholder="{{ __('What\'s not working, or what you\'d like to be able to do.') }}"
                                                 class="!rounded-[10px] !px-[13px] !py-[11px] !text-sm" />
                             </x-rsc.field>
+
+                            <x-rsc.honeypot model="websiteUrl" />
 
                             <x-rsc.turnstile action="enquiry" on="submit" model="turnstileToken" />
 

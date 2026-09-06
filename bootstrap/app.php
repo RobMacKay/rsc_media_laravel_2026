@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\SetTeamUrlDefaults;
+use App\Http\Middleware\VerifyHoneypot;
 use App\Http\Middleware\VerifyTurnstile;
 use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
 use Illuminate\Foundation\Application;
@@ -17,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
             SetTeamUrlDefaults::class,
+            VerifyHoneypot::class,
             VerifyTurnstile::class,
         ]);
 

@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Rules\TurnstileToken;
+use App\Support\PublicForms;
 use App\Support\Turnstile;
 use Closure;
 use Illuminate\Http\Request;
@@ -11,22 +12,6 @@ use Symfony\Component\HttpFoundation\Response;
 
 class VerifyTurnstile
 {
-    /**
-     * The public forms a bot is worth stopping on.
-     *
-     * Fortify owns these routes, so the check is applied by name here rather
-     * than by hanging middleware off route definitions we do not write.
-     * Everything else — logout, anything behind a login, the signed welcome
-     * link — is deliberately left alone.
-     *
-     * @var array<int, string>
-     */
-    public const PROTECTED_ROUTES = [
-        'register.store',
-        'password.email',
-        'login.store',
-    ];
-
     public function __construct(private Turnstile $turnstile) {}
 
     /**
@@ -60,6 +45,6 @@ class VerifyTurnstile
     {
         return $this->turnstile->enabled()
             && $request->isMethod('POST')
-            && $request->routeIs(...self::PROTECTED_ROUTES);
+            && $request->routeIs(...PublicForms::ROUTES);
     }
 }

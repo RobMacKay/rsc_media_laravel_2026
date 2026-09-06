@@ -6,7 +6,6 @@ use App\Notifications\NewEnquiry;
 use App\Support\Turnstile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
-use Livewire\Livewire;
 
 /**
  * Switch bot protection on with Cloudflare's own test keys.
@@ -46,7 +45,7 @@ test('nothing is asked of anyone while it is switched off', function () {
     Http::fake();
     Notification::fake();
 
-    Livewire::test('pages::home')
+    enquiryForm()
         ->assertDontSee('challenges.cloudflare.com')
         ->set('name', 'Jane Smith')
         ->set('email', 'jane@company.co.uk')
@@ -65,7 +64,7 @@ test('a token Cloudflare accepts lets the enquiry through', function () {
 
     $admin = User::factory()->admin()->create();
 
-    Livewire::test('pages::home')
+    enquiryForm()
         ->set('name', 'Jane Smith')
         ->set('email', 'jane@company.co.uk')
         ->set('message', 'Our booking form is a spreadsheet.')
@@ -86,7 +85,7 @@ test('a token Cloudflare refuses stops the enquiry, and nothing is recorded', fu
     turnstileSays(false, ['invalid-input-response']);
     Notification::fake();
 
-    Livewire::test('pages::home')
+    enquiryForm()
         ->set('name', 'Spam Bot')
         ->set('email', 'bot@example.com')
         ->set('message', 'Cheap backlinks.')
@@ -102,7 +101,7 @@ test('a submission with no token at all is refused without asking Cloudflare', f
     turnstileOn();
     Http::fake();
 
-    Livewire::test('pages::home')
+    enquiryForm()
         ->set('name', 'Spam Bot')
         ->set('email', 'bot@example.com')
         ->set('message', 'Cheap backlinks.')
@@ -118,7 +117,7 @@ test('an outage at Cloudflare does not take the enquiry form down with it', func
     Http::fake([Turnstile::VERIFY_URL => Http::response('', 503)]);
     Notification::fake();
 
-    Livewire::test('pages::home')
+    enquiryForm()
         ->set('name', 'Jane Smith')
         ->set('email', 'jane@company.co.uk')
         ->set('message', 'Our booking form is a spreadsheet.')
@@ -133,14 +132,14 @@ test('registering needs a token once it is switched on', function () {
     turnstileOn();
     turnstileSays(false, ['invalid-input-response']);
 
-    $this->post(route('register.store'), [
+    $this->post(route('register.store'), typedByHand([
         'name' => 'Kirsty Munro',
         'business' => 'Braemar Joinery',
         'email' => 'kirsty@braemarjoinery.co.uk',
         'password' => 'wobbly-elephant-42',
         'password_confirmation' => 'wobbly-elephant-42',
         'cf-turnstile-response' => 'forged',
-    ])->assertSessionHasErrors('cf-turnstile-response');
+    ]))->assertSessionHasErrors('cf-turnstile-response');
 
     expect(User::where('email', 'kirsty@braemarjoinery.co.uk')->exists())->toBeFalse();
 });
@@ -149,14 +148,14 @@ test('a real visitor can still register', function () {
     turnstileOn();
     turnstileSays(true);
 
-    $this->post(route('register.store'), [
+    $this->post(route('register.store'), typedByHand([
         'name' => 'Kirsty Munro',
         'business' => 'Braemar Joinery',
         'email' => 'kirsty@braemarjoinery.co.uk',
         'password' => 'wobbly-elephant-42',
         'password_confirmation' => 'wobbly-elephant-42',
         'cf-turnstile-response' => 'a-token-from-the-widget',
-    ])->assertSessionHasNoErrors();
+    ]))->assertSessionHasNoErrors();
 
     expect(User::where('email', 'kirsty@braemarjoinery.co.uk')->exists())->toBeTrue();
 });

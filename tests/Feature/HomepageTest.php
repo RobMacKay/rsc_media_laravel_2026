@@ -7,7 +7,6 @@ use App\Models\Team;
 use App\Models\User;
 use App\Notifications\NewEnquiry;
 use Illuminate\Support\Facades\Notification;
-use Livewire\Livewire;
 
 test('the homepage lists the plans on offer', function () {
     Plan::factory()->create(['name' => 'Care & Support', 'sort_order' => 1]);
@@ -25,7 +24,7 @@ test('an enquiry is stored and the studio is told about it', function () {
     $ross = User::factory()->admin()->create();
     User::factory()->create();
 
-    Livewire::test('pages::home')
+    enquiryForm()
         ->set('name', 'Jane Smith')
         ->set('email', 'jane@company.co.uk')
         ->set('company', 'Company Ltd')
@@ -45,7 +44,7 @@ test('an enquiry is stored and the studio is told about it', function () {
 });
 
 test('an enquiry needs a name, an email and a message', function () {
-    Livewire::test('pages::home')
+    enquiryForm()
         ->set('name', '')
         ->set('email', 'not-an-email')
         ->set('message', '')
@@ -56,7 +55,7 @@ test('an enquiry needs a name, an email and a message', function () {
 });
 
 test('an unknown topic is rejected', function () {
-    Livewire::test('pages::home')
+    enquiryForm()
         ->set('name', 'Jane Smith')
         ->set('email', 'jane@company.co.uk')
         ->set('topic', 'something-else')

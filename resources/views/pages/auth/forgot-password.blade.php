@@ -10,6 +10,8 @@
             <x-rsc.input type="email" name="email" required autofocus placeholder="you@yourbusiness.co.uk" />
         </x-rsc.field>
 
+        <x-rsc.honeypot />
+
         <x-rsc.turnstile action="password-reset" />
 
         <x-rsc.button type="submit" data-test="email-password-reset-link-button" class="!px-[26px] !py-[15px]">
