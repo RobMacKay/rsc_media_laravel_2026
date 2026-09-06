@@ -329,7 +329,7 @@ class extends Component {
         Flux::toast(
             variant: $decision === QuoteResponse::Approved ? 'success' : 'warning',
             text: $decision === QuoteResponse::Approved
-                ? __('Quote approved — Ross has been told.')
+                ? __('Quote approved — Rob has been told.')
                 : __('Quote declined.'),
         );
     }
@@ -437,7 +437,7 @@ class extends Component {
                         {{ __('Logged as :reference.', ['reference' => $raisedReference]) }}
                     </div>
                     <p class="m-0 max-w-[52ch] text-[15px] text-muted">
-                        {{ __('You\'ll get an email when Ross picks it up, and it\'ll show at the top of the list below.') }}
+                        {{ __('You\'ll get an email when Rob picks it up, and it\'ll show at the top of the list below.') }}
                     </p>
                     <x-rsc.button variant="outline" wire:click="closeForm" class="self-start !px-[22px] !py-2.5 !text-sm">
                         {{ __('Back to tickets') }}
@@ -500,7 +500,7 @@ class extends Component {
 
                     <div class="flex flex-wrap items-center gap-4">
                         <x-rsc.button type="submit" class="px-[30px] py-3.5">{{ __('Send ticket') }}</x-rsc.button>
-                        <span class="text-[13px] text-muted">{{ __('Goes straight to Ross. Response within 1 working day.') }}</span>
+                        <span class="text-[13px] text-muted">{{ __('Goes straight to Rob. Response within 1 working day.') }}</span>
                     </div>
                 </form>
             @endif
@@ -686,7 +686,7 @@ class extends Component {
 
                         <div class="flex flex-wrap items-center gap-3.5">
                             <x-rsc.button type="submit" class="!px-6 !py-3 !text-sm">{{ __('Send') }}</x-rsc.button>
-                            <span class="text-xs text-muted">{{ __('Ross gets an email when you reply.') }}</span>
+                            <span class="text-xs text-muted">{{ __('Rob gets an email when you reply.') }}</span>
                         </div>
                     </form>
                 @endif

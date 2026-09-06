@@ -3,7 +3,8 @@
     'badgeTone' => 'muted',
     'nav' => [],
     'footerLabel' => 'RSC Media — client area',
-    'footerNote' => 'Urgent? WhatsApp Ross on 07700 900 118',
+    // Defaults to the studio's own number, from settings, further down.
+    'footerNote' => null,
     'wide' => false,
     'title' => null,
 ])
@@ -67,7 +68,7 @@
                 @isset($footerAction)
                     {{ $footerAction }}
                 @else
-                    <span>{{ $footerNote }}</span>
+                    <span>{{ $footerNote ?? __('Urgent? WhatsApp Rob on :phone', ['phone' => app(\App\Models\StudioSetting::class)->phone]) }}</span>
                 @endisset
             </footer>
         </div>

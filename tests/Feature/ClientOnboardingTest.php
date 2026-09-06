@@ -27,7 +27,7 @@ function welcomeLink(User $user, ?DateTimeInterface $expiresAt = null): string
 test('creating a client opens the business, its owner, and emails them', function () {
     Notification::fake();
 
-    $admin = User::factory()->admin()->create(['name' => 'Ross Mackay']);
+    $admin = User::factory()->admin()->create(['name' => 'Rob MacKay']);
 
     $team = app(CreateClient::class)->handle(
         business: 'Braemar Joinery',

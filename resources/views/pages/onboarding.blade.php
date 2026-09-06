@@ -396,13 +396,13 @@ class extends Component {
             <x-rsc.panel padded="false" class="mb-[clamp(18px,2.2vw,28px)] overflow-hidden">
                 <div class="relative aspect-video bg-ink">
                     <iframe src="{{ $this->settings->welcome_video_url }}"
-                            title="{{ __('Introduction from Ross') }}"
+                            title="{{ __('Introduction from Rob') }}"
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                             allowfullscreen
                             class="absolute inset-0 block size-full border-0"></iframe>
                 </div>
                 <div class="flex flex-wrap items-center gap-x-5 gap-y-2.5 border-t border-line px-[22px] py-4">
-                    <div class="font-display text-base font-bold">{{ __('A quick hello from Ross') }}</div>
+                    <div class="font-display text-base font-bold">{{ __('A quick hello from Rob') }}</div>
                     <div class="text-sm text-muted">{{ __('What the portal does, and how to get hold of me. 90 seconds.') }}</div>
                 </div>
             </x-rsc.panel>
