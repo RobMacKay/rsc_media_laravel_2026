@@ -4,7 +4,9 @@ use App\Enums\ClientAccess;
 use App\Models\Enquiry;
 use App\Models\Team;
 use App\Models\User;
+use App\Notifications\SetYourPassword;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 
 test('the studio can see what has come in through the contact form', function () {
@@ -116,4 +118,105 @@ test('the admin nav offers the enquiries screen', function () {
         ->get(route('admin.queue'))
         ->assertOk()
         ->assertSee(route('admin.enquiries'));
+});
+
+test('an enquiry can be opened as a client account, prefilled from what they sent', function () {
+    Notification::fake();
+
+    $enquiry = Enquiry::factory()->create([
+        'name' => 'Alan Petrie',
+        'company' => 'Petrie Plant Hire',
+        'email' => 'alan@petrieplant.co.uk',
+    ]);
+
+    $component = Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.enquiries')
+        ->call('startAccount', $enquiry->id)
+        ->assertSet('newBusiness', 'Petrie Plant Hire')
+        ->assertSet('newContactName', 'Alan Petrie')
+        ->assertSet('newContactEmail', 'alan@petrieplant.co.uk');
+
+    $component->set('newJobTitle', 'Director')
+        ->call('openAccount')
+        ->assertHasNoErrors();
+
+    $team = Team::whereName('Petrie Plant Hire')->sole();
+    $user = User::whereEmail('alan@petrieplant.co.uk')->sole();
+
+    expect($user->must_set_password)->toBeTrue()
+        ->and($team->members->pluck('id'))->toContain($user->id)
+        ->and($user->accessFor($team)->canSeeBilling())->toBeTrue();
+
+    // Opening the account is dealing with the enquiry, and it remembers which.
+    expect($enquiry->fresh()->team_id)->toBe($team->id)
+        ->and($enquiry->fresh()->isHandled())->toBeTrue();
+
+    Notification::assertSentTo($user, SetYourPassword::class);
+});
+
+test('a sole trader with no company name falls back to their own', function () {
+    Notification::fake();
+
+    $enquiry = Enquiry::factory()->create(['name' => 'Morag Bell', 'company' => null]);
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.enquiries')
+        ->call('startAccount', $enquiry->id)
+        ->assertSet('newBusiness', 'Morag Bell');
+});
+
+test('someone who already has an account is told so, rather than getting a second one', function () {
+    Notification::fake();
+
+    $existing = User::factory()->create(['email' => 'kirsty@braemarjoinery.co.uk']);
+    $enquiry = Enquiry::factory()->create(['email' => 'kirsty@braemarjoinery.co.uk']);
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.enquiries')
+        ->call('startAccount', $enquiry->id)
+        ->call('openAccount')
+        ->assertHasErrors('newContactEmail');
+
+    expect(User::whereEmail('kirsty@braemarjoinery.co.uk')->count())->toBe(1)
+        ->and($enquiry->fresh()->becameClient())->toBeFalse();
+
+    Notification::assertNotSentTo($existing, SetYourPassword::class);
+});
+
+test('an account cannot be opened twice from the same enquiry', function () {
+    Notification::fake();
+
+    $enquiry = Enquiry::factory()->create(['team_id' => Team::factory()->create()->id]);
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.enquiries')
+        ->call('startAccount', $enquiry->id)
+        ->assertStatus(409);
+});
+
+test('a promoted enquiry shows the account it became instead of offering again', function () {
+    $team = Team::factory()->create(['name' => 'Petrie Plant Hire']);
+    Enquiry::factory()->create(['name' => 'Alan Petrie', 'team_id' => $team->id, 'handled_at' => now()]);
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.enquiries')
+        ->set('filter', 'all')
+        ->assertSee('now a client')
+        ->assertSee('opened as Petrie Plant Hire')
+        ->assertDontSee('open an account');
+});
+
+test('the account form can be dismissed without opening anything', function () {
+    $enquiry = Enquiry::factory()->create();
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.enquiries')
+        ->call('startAccount', $enquiry->id)
+        ->assertSet('opening', $enquiry->id)
+        ->call('cancelAccount')
+        ->assertSet('opening', null)
+        ->assertSet('newBusiness', '');
+
+    // The admin has a personal team of their own; nothing new was opened.
+    expect(Team::whereName($enquiry->company)->exists())->toBeFalse();
 });

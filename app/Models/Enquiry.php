@@ -8,12 +8,14 @@ use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
  * An enquiry sent through the contact form on the public site.
  *
  * @property int $id
+ * @property int|null $team_id
  * @property string $name
  * @property string $email
  * @property string|null $company
@@ -22,8 +24,9 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $handled_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read Team|null $team
  */
-#[Fillable(['name', 'email', 'company', 'topic', 'message', 'handled_at'])]
+#[Fillable(['team_id', 'name', 'email', 'company', 'topic', 'message', 'handled_at'])]
 class Enquiry extends Model
 {
     /** @use HasFactory<EnquiryFactory> */
@@ -47,6 +50,24 @@ class Enquiry extends Model
     public function topicLabel(): string
     {
         return self::TOPICS[$this->topic] ?? $this->topic;
+    }
+
+    /**
+     * Get the client account this enquiry turned into, if it turned into one.
+     *
+     * @return BelongsTo<Team, $this>
+     */
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class);
+    }
+
+    /**
+     * Determine whether this enquiry has been opened as a client account.
+     */
+    public function becameClient(): bool
+    {
+        return $this->team_id !== null;
     }
 
     /**
