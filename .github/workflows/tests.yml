@@ -22,7 +22,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
-          php-version: '8.3'
+          php-version: '8.5'
           tools: composer:v2
           coverage: none
 
@@ -76,15 +76,28 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
-          php-version: '8.3'
+          php-version: '8.5'
           tools: composer:v2
           coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
 
       - name: Install dependencies
         run: |
           composer install --no-interaction --no-progress
           cp -n .env.example .env
           php artisan key:generate
+
+      # Anything that renders a page needs the manifest, and most of the suite
+      # renders a page. Without this the job fails on Vite rather than on
+      # anything MySQL has to say.
+      - name: Build assets
+        run: |
+          npm install
+          npm run build
 
       - name: Run the test suite against MySQL
         run: vendor/bin/pest --compact
