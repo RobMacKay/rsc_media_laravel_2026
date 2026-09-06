@@ -10,9 +10,12 @@ use App\Models\StudioSetting;
 use App\Models\Team;
 use App\Models\Ticket;
 use App\Models\TicketComment;
+use App\Models\User;
+use App\Notifications\TicketRaised;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -384,6 +387,8 @@ class extends Component {
         if ($this->upload) {
             app(StoreAttachment::class)->handle($ticket, $this->upload, Auth::user());
         }
+
+        Notification::send(User::query()->where('is_admin', true)->get(), new TicketRaised($ticket));
 
         $this->reset('subject', 'system', 'pageUrl', 'description', 'upload');
         $this->raisedReference = $ticket->reference;

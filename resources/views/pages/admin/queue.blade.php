@@ -28,6 +28,9 @@ class extends Component {
     #[Url(as: 'filter', except: 'all')]
     public string $filter = 'all';
 
+    #[Url(as: 'sort', except: 'urgency')]
+    public string $sort = 'urgency';
+
     #[Url(as: 'ticket', except: null)]
     public ?string $selectedReference = null;
 
@@ -55,9 +58,39 @@ class extends Component {
             ->with(['team', 'reporter', 'comments.author'])
             ->withReadsFor(Auth::user())
             ->when($this->filter !== 'all', fn ($query) => $query->where('status', $this->filter))
-            ->orderByRaw("CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END")
-            ->latest('updated_at')
+            ->when($this->sort === 'urgency', fn ($query) => $query
+                ->orderByRaw("CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END")
+                ->latest('updated_at'))
+            ->when($this->sort === 'newest', fn ($query) => $query->latest('created_at'))
+            ->when($this->sort === 'activity', fn ($query) => $query->latest('updated_at'))
             ->get();
+    }
+
+    /**
+     * Get the orderings the queue can be read in.
+     *
+     * @return array<string, string>
+     */
+    #[Computed]
+    public function sorts(): array
+    {
+        return [
+            'urgency' => __('Most urgent'),
+            'newest' => __('Newest first'),
+            'activity' => __('Latest activity'),
+        ];
+    }
+
+    /**
+     * Reorder the queue, keeping whichever ticket is open on screen.
+     */
+    public function sortBy(string $sort): void
+    {
+        abort_unless(array_key_exists($sort, $this->sorts), 404);
+
+        $this->sort = $sort;
+
+        unset($this->tickets, $this->current);
     }
 
     /**
@@ -121,7 +154,7 @@ class extends Component {
 
         $this->current?->markReadBy(Auth::user());
 
-        unset($this->tickets, $this->updatedCount);
+        unset($this->tickets, $this->updatedCount, $this->newCount);
     }
 
     /**
@@ -131,6 +164,15 @@ class extends Component {
     public function updatedCount(): int
     {
         return $this->tickets->filter(fn (Ticket $ticket) => $ticket->hasUpdateFor(Auth::user()))->count();
+    }
+
+    /**
+     * Get how many tickets this person has never opened.
+     */
+    #[Computed]
+    public function newCount(): int
+    {
+        return $this->tickets->filter(fn (Ticket $ticket) => $ticket->isUnseenBy(Auth::user()))->count();
     }
 
     /**
@@ -152,7 +194,7 @@ class extends Component {
     {
         $this->current?->fresh()?->markReadBy(Auth::user());
 
-        unset($this->tickets, $this->updatedCount);
+        unset($this->tickets, $this->updatedCount, $this->newCount);
     }
 
     /**
@@ -319,8 +361,11 @@ class extends Component {
         <div>
             <x-rsc.kicker class="mb-2.5">{{ str(now()->format('l_j_F'))->lower() }}</x-rsc.kicker>
             <x-rsc.heading class="!text-[clamp(28px,4vw,46px)]">{{ __('Queue') }}</x-rsc.heading>
-            @if ($this->updatedCount > 0 || $this->awaitingClients > 0)
+            @if ($this->newCount > 0 || $this->updatedCount > 0 || $this->awaitingClients > 0)
                 <p class="mt-3 flex flex-wrap items-center gap-2.5 text-[15px] text-muted">
+                    @if ($this->newCount > 0)
+                        <x-rsc.pill tone="warm">{{ trans_choice('{1}1 new ticket|[2,*]:count new tickets', $this->newCount, ['count' => $this->newCount]) }}</x-rsc.pill>
+                    @endif
                     @if ($this->updatedCount > 0)
                         <x-rsc.pill tone="brand">{{ trans_choice('{1}1 ticket has moved|[2,*]:count tickets have moved', $this->updatedCount, ['count' => $this->updatedCount]) }}</x-rsc.pill>
                     @endif
@@ -341,32 +386,47 @@ class extends Component {
         </div>
     </div>
 
-    <div class="mb-[18px] flex flex-wrap gap-2">
-        <x-rsc.chip wire:click="$set('filter', 'all')" :active="$filter === 'all'">All</x-rsc.chip>
-        @foreach (\App\Enums\TicketStatus::cases() as $status)
-            <x-rsc.chip wire:click="$set('filter', '{{ $status->value }}')" :active="$filter === $status->value">{{ $status->label() }}</x-rsc.chip>
-        @endforeach
+    <div class="mb-[18px] flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
+        <div class="flex flex-wrap gap-2">
+            <x-rsc.chip wire:click="$set('filter', 'all')" :active="$filter === 'all'">All</x-rsc.chip>
+            @foreach (\App\Enums\TicketStatus::cases() as $status)
+                <x-rsc.chip wire:click="$set('filter', '{{ $status->value }}')" :active="$filter === $status->value">{{ $status->label() }}</x-rsc.chip>
+            @endforeach
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <span class="font-mono text-[11px] text-muted">{{ __('order_by') }}</span>
+            @foreach ($this->sorts as $key => $label)
+                <x-rsc.chip wire:click="sortBy('{{ $key }}')" :active="$sort === $key">{{ $label }}</x-rsc.chip>
+            @endforeach
+        </div>
     </div>
 
     <div class="grid items-start gap-[clamp(12px,1.4vw,18px)] lg:grid-cols-[minmax(320px,1fr)_minmax(340px,1.15fr)]">
         <div class="overflow-hidden rounded-[20px] border border-line bg-panel">
             @forelse ($this->tickets as $ticket)
-                @php $selected = $this->current?->is($ticket); @endphp
+                @php
+                    $selected = $this->current?->is($ticket);
+                    $unseen = $ticket->isUnseenBy(auth()->user());
+                @endphp
                 <button type="button" wire:click="select('{{ $ticket->reference }}')"
                         class="grid w-full cursor-pointer grid-cols-[1fr_auto] gap-x-3.5 gap-y-2 border-b border-line border-s-[3px] px-5 py-4 text-left transition-colors duration-200"
                         @style([
                             'background: color-mix(in srgb, var(--rsc-accent) 8%, transparent); border-left-color: var(--rsc-accent)' => $selected,
-                            'background: transparent; border-left-color: transparent' => ! $selected,
+                            'background: color-mix(in srgb, var(--rsc-warm) 9%, transparent); border-left-color: var(--rsc-warm)' => ! $selected && $unseen,
+                            'background: transparent; border-left-color: transparent' => ! $selected && ! $unseen,
                         ])>
                     <span class="flex flex-wrap items-center gap-2 font-mono text-[11px] text-muted">
                         {{ $ticket->reference }} · {{ $ticket->team->name }}
-                        @if ($ticket->hasUpdateFor(auth()->user()))
-                            <x-rsc.pill tone="brand" class="!px-2 !py-px !text-[10px] !tracking-[0.06em]">{{ __('new') }}</x-rsc.pill>
+                        @if ($unseen)
+                            <x-rsc.pill tone="warm" class="!px-2 !py-px !text-[10px] !tracking-[0.06em]">{{ __('new') }}</x-rsc.pill>
+                        @elseif ($ticket->hasUpdateFor(auth()->user()))
+                            <x-rsc.pill tone="brand" class="!px-2 !py-px !text-[10px] !tracking-[0.06em]">{{ __('updated') }}</x-rsc.pill>
                         @endif
                     </span>
                     <x-rsc.pill :tone="$ticket->status->tone()" class="justify-self-end">{{ str($ticket->status->label())->lower() }}</x-rsc.pill>
                     <span class="col-span-full font-display text-base font-bold tracking-[-0.015em]">{{ $ticket->title }}</span>
-                    <span class="text-xs text-muted">{{ $ticket->system }}</span>
+                    <span class="text-xs text-muted">{{ $ticket->system }}{{ $ticket->system ? ' · ' : '' }}{{ __('raised :when', ['when' => $ticket->created_at->diffForHumans()]) }}</span>
                     <span class="justify-self-end font-mono text-[11px] {{ $ticket->priority->isPressing() ? 'text-warm' : 'text-muted' }}">{{ str($ticket->priority->label())->lower() }}</span>
                 </button>
             @empty

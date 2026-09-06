@@ -176,6 +176,17 @@ class Ticket extends Model implements HasAttachments
     }
 
     /**
+     * Determine whether this person has never opened the ticket at all.
+     *
+     * Narrower than `hasUpdateFor`: to the studio this is a ticket that has
+     * just come in, rather than one that has moved since it was last read.
+     */
+    public function isUnseenBy(User $user): bool
+    {
+        return $this->reads->firstWhere('user_id', $user->id) === null;
+    }
+
+    /**
      * Eager load just this person's read marks.
      *
      * @param  Builder<$this>  $query
