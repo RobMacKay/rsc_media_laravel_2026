@@ -9,3 +9,4 @@ Before planning or editing, find the row whose globs match the file's path and r
 | resources/views/vendor/mail/** | .ai/rules/mail.md |
 | app/Models/**, app/Models/Site.php, app/Models/Enquiry.php | .ai/rules/models.md |
 | resources/views/** | .ai/rules/views.md |
+| .github/workflows/** | .ai/rules/workflows.md |
