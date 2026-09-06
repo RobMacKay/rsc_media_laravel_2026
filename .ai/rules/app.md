@@ -95,3 +95,10 @@ Reminders climb `App\Enums\InvoiceReminder` — DueSoon (-3 days), JustOverdue (
 Recipients are `team.billing_email` if set, else members whose access `canSeeBilling()` — never everyone, since a tickets-only member has no business being chased for money. An account with nobody to email is skipped without staging, so the reminder goes out once somebody can receive it.
 
 `reminders_paused_at` mutes one invoice (the "mute" control on the admin list); `studio_settings.invoice_reminders` turns the emails off entirely while still marking things overdue.
+
+## New tickets email the studio, and the queue flags what has never been opened
+Raising a ticket in `pages::client.tickets` sends `App\Notifications\TicketRaised` to every `is_admin` user (same pattern as `NewEnquiry`), with the priority in the subject and a deep link to `admin.queue?ticket=REF`. Nothing else raises tickets today; if another entry point appears, send it there too.
+
+`Ticket::isUnseenBy($user)` is narrower than `hasUpdateFor($user)`: no read row at all, meaning brand new to the studio. The admin queue uses it for the warm "new" pill and row tint, and reserves the brand "updated" pill for a ticket that has moved since it was last read. Both rely on `withReadsFor()` being on the query.
+
+The queue's ordering is `$sort` (urgency | newest | activity) via `sortBy()`, which whitelists against the `sorts()` computed property — keep the two in step rather than trusting the URL value.
