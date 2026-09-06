@@ -189,7 +189,7 @@ class extends Component {
                     </div>
 
                     <div class="flex flex-wrap items-center gap-4">
-                        <x-rsc.button type="submit" class="px-[30px] py-3.5">{{ __('Send invite') }}</x-rsc.button>
+                        <x-rsc.button type="submit" target="invite" class="px-[30px] py-3.5">{{ __('Send invite') }}</x-rsc.button>
                         <span class="text-[13px] text-muted">{{ __('They get an email with a code to set their own password.') }}</span>
                     </div>
                 </form>

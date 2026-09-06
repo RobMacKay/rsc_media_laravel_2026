@@ -88,7 +88,7 @@ class extends Component {
                                  placeholder="{{ __('Type it again') }}" />
                 </x-rsc.field>
 
-                <x-rsc.button type="submit" class="mt-1 w-full py-3.5">{{ __('Set password and sign in') }}</x-rsc.button>
+                <x-rsc.button type="submit" target="save" class="mt-1 w-full py-3.5">{{ __('Set password and sign in') }}</x-rsc.button>
             </form>
         </section>
     </main>

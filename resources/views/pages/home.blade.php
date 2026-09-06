@@ -544,7 +544,7 @@ class extends Component {
 
                             <x-rsc.turnstile action="enquiry" on="submit" model="turnstileToken" />
 
-                            <x-rsc.button type="submit" class="self-start !px-6 !py-3.5 !font-sans !font-semibold">{{ __('Send it over') }}</x-rsc.button>
+                            <x-rsc.button type="submit" target="send" :busy-label="__('Sending…')" class="self-start !px-6 !py-3.5 !font-sans !font-semibold">{{ __('Send it over') }}</x-rsc.button>
 
                             <p class="m-0 font-mono text-[11px] text-muted">{{ __('// we\'ll only use this to reply. no lists, no chasing.') }}</p>
                         </form>
