@@ -651,7 +651,7 @@ class extends Component {
         </x-rsc.panel>
 
         <div class="flex flex-wrap items-center gap-3.5">
-            <x-rsc.button type="submit" class="px-7 py-3.5">{{ __('Save settings') }}</x-rsc.button>
+            <x-rsc.button type="submit" target="save" :busy-label="__('Saving…')" class="px-7 py-3.5">{{ __('Save settings') }}</x-rsc.button>
             <span class="text-[13px] text-muted">{{ __('Rates apply to new quotes only. Quotes already sent keep the price you quoted.') }}</span>
         </div>
     </form>

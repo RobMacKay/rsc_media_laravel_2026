@@ -76,6 +76,35 @@ class StudioSetting extends Model
     }
 
     /**
+     * Get the welcome video's URL with the host's own tracking turned off.
+     *
+     * A bare Vimeo or YouTube embed sets tracking cookies the moment the page
+     * loads, which would be the only thing on this site needing consent. Both
+     * offer a way not to: YouTube has a no-cookie domain, and Vimeo honours
+     * `dnt`. Using them keeps the video consent-free.
+     */
+    public function welcomeVideoEmbedUrl(): ?string
+    {
+        $url = trim((string) $this->welcome_video_url);
+
+        if ($url === '') {
+            return null;
+        }
+
+        $host = (string) parse_url($url, PHP_URL_HOST);
+
+        if (str_contains($host, 'youtube.com')) {
+            return str_replace($host, 'www.youtube-nocookie.com', $url);
+        }
+
+        if (str_contains($host, 'vimeo.com') && ! str_contains($url, 'dnt=')) {
+            return $url.(str_contains($url, '?') ? '&' : '?').'dnt=1';
+        }
+
+        return $url;
+    }
+
+    /**
      * Get the studio's address as one line per entry, for the invoice header.
      *
      * @return array<int, string>

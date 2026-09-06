@@ -243,7 +243,7 @@ class extends Component {
                     </div>
 
                     <div class="flex flex-wrap items-center gap-3.5 border-t border-line pt-4">
-                        <x-rsc.button type="submit" class="px-[26px] py-3.5">{{ __('Send it over') }}</x-rsc.button>
+                        <x-rsc.button type="submit" target="propose" class="px-[26px] py-3.5">{{ __('Send it over') }}</x-rsc.button>
                         <span class="text-[13px] text-muted">
                             {{ __('No commitment. We come back with scope, price and dates within two working days.') }}
                         </span>

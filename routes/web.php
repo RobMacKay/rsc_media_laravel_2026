@@ -10,6 +10,11 @@ use Illuminate\Support\Facades\Route;
 
 Route::livewire('/', 'pages::home')->name('home');
 
+Route::name('legal.')->group(function () {
+    Route::livewire('privacy', 'pages::legal.privacy')->name('privacy');
+    Route::livewire('cookies', 'pages::legal.cookies')->name('cookies');
+});
+
 // The welcome link from a studio-created account. Signed and time limited, and
 // the page itself refuses anyone who has already chosen a password.
 Route::livewire('set-password/{user}', 'pages::auth.set-password')

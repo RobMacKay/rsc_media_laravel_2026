@@ -232,6 +232,7 @@ class extends Component {
                             {{ $filesForJobId === $job->id ? __('hide files') : __('attach file') }}
                         </button>
                         <button type="button" class="cursor-pointer text-brand"
+                                wire:target="saveJob" wire:loading.attr="disabled" wire:loading.class="opacity-50"
                                 x-on:click="$wire.saveJob({{ $job->id }}, { percent, milestone, due_on: due || null, waiting_on_client: waiting })">
                             {{ __('save changes') }}
                         </button>

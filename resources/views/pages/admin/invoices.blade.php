@@ -901,7 +901,7 @@ class extends Component {
                         </div>
 
                         <div class="flex flex-wrap items-center gap-4">
-                            <x-rsc.button type="submit" class="px-[30px] py-3.5">{{ __('Generate and send') }}</x-rsc.button>
+                            <x-rsc.button type="submit" target="save" class="px-[30px] py-3.5">{{ __('Generate and send') }}</x-rsc.button>
                             <span class="text-[13px] text-muted">{{ __('Terms, VAT and bank details come from settings.') }}</span>
                         </div>
                     </form>

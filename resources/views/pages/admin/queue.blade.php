@@ -544,6 +544,7 @@ class extends Component {
                     <div class="mt-5 flex flex-wrap gap-3">
                         <x-rsc.button
                             x-on:click="$wire.sendQuote({ hours, rate, billing_mode: billing, priority, target_on: target || null })"
+                            target="sendQuote"
                             class="!px-6 !py-3 !text-sm">
                             <span x-show="billing === 'chargeable'" x-cloak>{{ __('Send quote to client') }}</span>
                             <span x-show="billing !== 'chargeable'">{{ __('Log against the job') }}</span>
@@ -627,7 +628,7 @@ class extends Component {
                         </x-rsc.field>
 
                         <div class="mt-3.5 flex flex-wrap items-center gap-3.5">
-                            <x-rsc.button type="submit" class="!px-6 !py-3 !text-sm">
+                            <x-rsc.button type="submit" target="postReply" class="!px-6 !py-3 !text-sm">
                                 {{ $replyMode === 'internal' ? __('Save note') : __('Send reply') }}
                             </x-rsc.button>
                             <span class="text-xs text-muted">

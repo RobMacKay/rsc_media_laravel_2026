@@ -499,7 +499,7 @@ class extends Component {
                                     :hint="__('PNG, JPG or PDF, up to :size.', ['size' => \Illuminate\Support\Number::fileSize(\App\Models\Attachment::maxUploadKb(\App\Models\Attachment::CLIENT_MAX_KB) * 1024)])" />
 
                     <div class="flex flex-wrap items-center gap-4">
-                        <x-rsc.button type="submit" class="px-[30px] py-3.5">{{ __('Send ticket') }}</x-rsc.button>
+                        <x-rsc.button type="submit" target="save" :busy-label="__('Sending…')" class="px-[30px] py-3.5">{{ __('Send ticket') }}</x-rsc.button>
                         <span class="text-[13px] text-muted">{{ __('Goes straight to Rob. Response within 1 working day.') }}</span>
                     </div>
                 </form>
@@ -685,7 +685,7 @@ class extends Component {
                         </x-rsc.field>
 
                         <div class="flex flex-wrap items-center gap-3.5">
-                            <x-rsc.button type="submit" class="!px-6 !py-3 !text-sm">{{ __('Send') }}</x-rsc.button>
+                            <x-rsc.button type="submit" target="addComment" class="!px-6 !py-3 !text-sm">{{ __('Send') }}</x-rsc.button>
                             <span class="text-xs text-muted">{{ __('Rob gets an email when you reply.') }}</span>
                         </div>
                     </form>

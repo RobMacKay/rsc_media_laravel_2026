@@ -544,7 +544,7 @@ class extends Component {
 
                             <x-rsc.turnstile action="enquiry" on="submit" model="turnstileToken" />
 
-                            <x-rsc.button type="submit" class="self-start !px-6 !py-3.5 !font-sans !font-semibold">{{ __('Send it over') }}</x-rsc.button>
+                            <x-rsc.button type="submit" target="send" :busy-label="__('Sending…')" class="self-start !px-6 !py-3.5 !font-sans !font-semibold">{{ __('Send it over') }}</x-rsc.button>
 
                             <p class="m-0 font-mono text-[11px] text-muted">{{ __('// we\'ll only use this to reply. no lists, no chasing.') }}</p>
                         </form>
@@ -562,6 +562,8 @@ class extends Component {
                         <a href="{{ $href }}" class="text-muted no-underline hover:text-body">{{ $label }}</a>
                     @endforeach
                     <a href="{{ $portal['url'] }}" class="text-muted no-underline hover:text-body">{{ $portal['label'] }}</a>
+                    <a href="{{ route('legal.privacy') }}" class="text-muted no-underline hover:text-body" wire:navigate>privacy</a>
+                    <a href="{{ route('legal.cookies') }}" class="text-muted no-underline hover:text-body" wire:navigate>cookies</a>
                 </div>
 
                 <div class="font-mono text-xs text-muted">© {{ now()->year }} RSC Media Ltd</div>
