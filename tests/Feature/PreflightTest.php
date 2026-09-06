@@ -61,8 +61,10 @@ test('a scheduler that ran a moment ago passes', function () {
 });
 
 test('a mailer that sends nothing is only a warning off production, and fatal on it', function () {
+    // Switch the store before leaving the mark, or it lands in the array store
+    // the suite uses and the command looks somewhere else for it.
+    config(['app.debug' => false, 'cache.default' => 'database', 'mail.default' => 'log', 'mail.from.address' => 'hello@rscmedia.co.uk']);
     schedulerRan();
-    config(['mail.default' => 'log', 'mail.from.address' => 'hello@rscmedia.co.uk']);
 
     $this->artisan('app:preflight', ['--skip-probe' => true])->assertSuccessful();
 
@@ -93,10 +95,11 @@ test('a live site on a plain http url is refused, because signed links would bre
 });
 
 test('a properly set up server passes', function () {
-    schedulerRan();
     asProduction();
 
     config([
+        'app.debug' => false,
+        'cache.default' => 'database',
         'queue.default' => 'database',
         'app.url' => 'https://rscmedia.co.uk',
         'mail.default' => 'postmark',
@@ -104,6 +107,8 @@ test('a properly set up server passes', function () {
         'services.turnstile.site_key' => '1x00000000000000000000AA',
         'services.turnstile.secret_key' => '1x0000000000000000000000000000000AA',
     ]);
+
+    schedulerRan();
 
     $this->artisan('app:preflight', ['--skip-probe' => true])->assertSuccessful();
 });
@@ -127,5 +132,24 @@ test('a live site left on the sync queue is refused', function () {
 
     $this->artisan('app:preflight', ['--skip-probe' => true])
         ->expectsOutputToContain('sync runs jobs in the request')
+        ->assertFailed();
+});
+
+test('debug mode left on in production is refused', function () {
+    schedulerRan();
+    asProduction();
+    config(['app.debug' => true]);
+
+    $this->artisan('app:preflight', ['--skip-probe' => true])
+        ->expectsOutputToContain('will show your credentials')
+        ->assertFailed();
+});
+
+test('a cache that does not persist is refused, because the scheduler check depends on it', function () {
+    schedulerRan();
+    config(['cache.default' => 'array']);
+
+    $this->artisan('app:preflight', ['--skip-probe' => true])
+        ->expectsOutputToContain('does not persist')
         ->assertFailed();
 });

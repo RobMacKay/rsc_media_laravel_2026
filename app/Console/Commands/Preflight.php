@@ -54,6 +54,8 @@ class Preflight extends Command
      */
     public function handle(Turnstile $turnstile): int
     {
+        $this->checkDebug();
+        $this->checkCacheStore();
         $this->checkMail();
         $this->checkQueue();
         $this->checkScheduler();
@@ -90,6 +92,43 @@ class Preflight extends Command
     private function countWith(string $result): int
     {
         return count(array_filter($this->results, fn (array $row) => $row[1] === $result));
+    }
+
+    /**
+     * Check the live site is not showing its workings to the world.
+     *
+     * A Laravel error page with debug on prints the environment, database
+     * credentials included.
+     */
+    private function checkDebug(): void
+    {
+        if ($this->isProduction() && config('app.debug')) {
+            $this->add('debug mode', 'FAIL', 'APP_DEBUG is on. Error pages will show your credentials.');
+
+            return;
+        }
+
+        $this->add('debug mode', 'PASS', config('app.debug') ? 'on (fine outside production)' : 'off');
+    }
+
+    /**
+     * Check the cache survives between requests.
+     *
+     * The scheduler check below reads a mark left in the cache every minute,
+     * so an in-memory store would make a perfectly healthy scheduler look
+     * permanently stopped — and take anything else that caches with it.
+     */
+    private function checkCacheStore(): void
+    {
+        $store = (string) config('cache.default');
+
+        if (in_array($store, ['array', 'null'], true)) {
+            $this->add('cache store', 'FAIL', "'{$store}' does not persist. Nothing cached survives the request.");
+
+            return;
+        }
+
+        $this->add('cache store', 'PASS', $store);
     }
 
     /**
