@@ -2,6 +2,7 @@
 paths:
   - 'app/Models/**'
   - app/Models/Site.php
+  - app/Models/Enquiry.php
 ---
 
 # Models
@@ -30,3 +31,14 @@ Tests that expect VAT on an invoice must set `vat_number` as well as `vat_regist
 The admin screen (`pages::admin.health`) is read-only over client sites by design — the studio watches them but does not manage them. That is enforced by scoping every write to `studioOwned()` (`Site::query()->studioOwned()->findOrFail(...)`), not by hiding buttons, so posting a client's id finds nothing.
 
 Consequences worth remembering: the client site allowance counts `team->sites()` so studio sites never eat into it; `CheckSite` notifies `is_admin` users when there is no team; and the log download allows admins any site but a client only their own. SQL treats nulls as distinct, so the `(team_id, host)` unique index does not stop the studio adding the same host twice — that is checked in the component.
+
+## An enquiry can become a client, and remembers that it did
+`enquiries.team_id` records the account an enquiry was opened as. Null is the normal case — most enquiries never become clients — and the foreign key is `nullOnDelete`, so deleting a client leaves the enquiry behind: what somebody originally asked for is worth keeping either way.
+
+The promote flow on `pages::admin.enquiries` goes through `App\Actions\Clients\CreateClient`, the same action the invoices panel and the settings screen use, so the welcome email and the signed password link cannot drift between the three entry points. It also shares `pages/admin/partials/new-client-fields.blade.php` with them.
+
+`startAccount()` pre-fills the business from `company`, falling back to the person's name — a sole trader usually *is* the business, and that is a better guess than an empty box. Both `startAccount()` and `openAccount()` `abort_if(becameClient())` so the same enquiry cannot open two accounts, whatever id is posted.
+
+Opening an account also stamps `handled_at`: dealing with someone by taking them on is still dealing with them, and the enquiry should stop asking.
+
+An address that already has a user is refused by `Rule::unique` with its own message rather than silently making a second account.

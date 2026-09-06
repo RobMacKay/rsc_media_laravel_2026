@@ -258,7 +258,7 @@ class extends Component {
                     </div>
                     <div class="font-display text-base font-bold tracking-[-0.02em]">{{ $proposal->title }}</div>
                     <div class="mt-1 text-[13px] text-muted">
-                        {{ $proposal->team->name }} · {{ $proposal->created_at->format('j F') }}
+                        {{ $proposal->team->name }} · {{ shown($proposal->created_at)->format('j F') }}
                     </div>
                 </button>
             @empty
@@ -290,7 +290,7 @@ class extends Component {
                     <x-rsc.heading :level="2" class="!text-[clamp(20px,2.2vw,27px)]">{{ $proposal->title }}</x-rsc.heading>
                     <div class="mt-1.5 text-[13px] text-muted">
                         {{ $proposal->team->name }} · {{ $proposal->contact ?? $proposal->requester?->name }} ·
-                        {{ __('received :when', ['when' => $proposal->created_at->format('j F')]) }}
+                        {{ __('received :when', ['when' => shown($proposal->created_at)->format('j F')]) }}
                     </div>
 
                     <p class="m-0 mt-[18px] text-[15px] leading-relaxed text-pretty">{{ $proposal->brief }}</p>

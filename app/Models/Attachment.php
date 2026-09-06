@@ -204,7 +204,7 @@ class Attachment extends Model
         $parts = [Number::fileSize($this->size)];
 
         $parts[] = $this->shared_with_client
-            ? ($this->uploader?->name ? 'from '.str($this->uploader->name)->before(' ') : 'uploaded '.$this->created_at?->format('j M'))
+            ? ($this->uploader?->name ? 'from '.str($this->uploader->name)->before(' ') : 'uploaded '.shown($this->created_at)?->format('j M'))
             : 'private';
 
         return implode(' · ', $parts);

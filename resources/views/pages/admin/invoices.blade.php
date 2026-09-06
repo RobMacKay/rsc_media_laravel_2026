@@ -704,7 +704,7 @@ class extends Component {
                                 {{ __(':hours hours at :rate, approved :when', [
                                     'hours' => rtrim(rtrim(number_format((float) $ticket->quoted_hours, 2), '0'), '.'),
                                     'rate' => $ticket->team->money((int) $ticket->quoted_rate),
-                                    'when' => $ticket->quote_responded_at?->format('j M') ?? '—',
+                                    'when' => shown($ticket->quote_responded_at)?->format('j M') ?? '—',
                                 ]) }}
                             </div>
                         </div>

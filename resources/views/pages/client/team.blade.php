@@ -240,7 +240,7 @@ class extends Component {
                 </div>
                 <div class="text-[13px] break-words text-muted">{{ $invitation->email }}</div>
                 <div class="flex flex-wrap items-center gap-x-4 gap-y-2.5 border-t border-line pt-3.5 font-mono text-[11px]">
-                    <span class="me-auto text-muted">{{ __('Expires :when', ['when' => $invitation->expires_at?->format('j M')]) }}</span>
+                    <span class="me-auto text-muted">{{ __('Expires :when', ['when' => shown($invitation->expires_at)?->format('j M')]) }}</span>
                     @if ($invitation->access)
                         <span class="text-muted">{{ $invitation->access->label() }}</span>
                     @endif

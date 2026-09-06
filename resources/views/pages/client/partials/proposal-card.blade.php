@@ -15,7 +15,7 @@
 
     @if (! $awaitingSignOff)
         <div class="mt-[22px] flex flex-wrap gap-x-6 gap-y-2 border-t border-line pt-5 text-sm text-muted">
-            <span>{{ __('Submitted :when', ['when' => $proposal->created_at->format('j F')]) }}</span>
+            <span>{{ __('Submitted :when', ['when' => shown($proposal->created_at)->format('j F')]) }}</span>
             @if ($proposal->budget_guide)
                 <span>{{ __('Budget guide :budget', ['budget' => $proposal->budget_guide]) }}</span>
             @endif
@@ -85,7 +85,7 @@
                     </div>
                     <div class="text-xs text-muted">
                         {{ __('Signing off starts the work and raises the deposit invoice. Sent :when.', [
-                            'when' => $proposal->sent_at?->format('j F'),
+                            'when' => shown($proposal->sent_at)?->format('j F'),
                         ]) }}
                     </div>
                 @else

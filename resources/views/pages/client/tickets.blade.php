@@ -593,7 +593,7 @@ class extends Component {
                     <x-rsc.pill :tone="$ticket->status->tone()">{{ str($ticket->status->clientLabel())->lower() }}</x-rsc.pill>
                     <x-rsc.pill :tone="$ticket->priority->isPressing() ? 'warm' : 'muted'">{{ str($ticket->priority->label())->lower() }}</x-rsc.pill>
                     <x-rsc.pill tone="muted">{{ str($ticket->type->label())->lower() }}</x-rsc.pill>
-                    <span class="ms-auto font-mono text-[11px] text-muted">{{ __('raised :when', ['when' => $ticket->created_at->format('j M Y')]) }}</span>
+                    <span class="ms-auto font-mono text-[11px] text-muted">{{ __('raised :when', ['when' => shown($ticket->created_at)->format('j M Y')]) }}</span>
                 </div>
 
                 <div>
@@ -608,7 +608,7 @@ class extends Component {
                     <div class="rounded-2xl border border-brand p-[clamp(16px,2vw,22px)]" style="box-shadow: 0 0 40px var(--rsc-glow)">
                         <div class="mb-3 flex items-center justify-between font-mono text-[11px] text-muted">
                             <span>quote</span>
-                            <span>{{ __('sent :when', ['when' => $ticket->quote_sent_at->format('j M')]) }}</span>
+                            <span>{{ __('sent :when', ['when' => shown($ticket->quote_sent_at)->format('j M')]) }}</span>
                         </div>
 
                         <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">

@@ -213,7 +213,7 @@
                     <div class="muted" style="padding-top: 9px">No VAT is charged on this invoice.</div>
                 @endunless
                 @if ($invoice->status->isOutstanding() === false && $invoice->paid_at)
-                    <div style="padding-top: 9px">Paid {{ $invoice->paid_at->format('j F Y') }} — thank you.</div>
+                    <div style="padding-top: 9px">Paid {{ shown($invoice->paid_at)->format('j F Y') }} — thank you.</div>
                 @endif
             </td>
         </tr>

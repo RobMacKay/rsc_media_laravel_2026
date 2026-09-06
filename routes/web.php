@@ -39,6 +39,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::prefix('admin')->name('admin.')->middleware(EnsureUserIsStudioAdmin::class)->group(function () {
         Route::livewire('/', 'pages::admin.queue')->name('queue');
+        Route::livewire('enquiries', 'pages::admin.enquiries')->name('enquiries');
         Route::livewire('proposals', 'pages::admin.proposals')->name('proposals');
         Route::livewire('jobs', 'pages::admin.jobs')->name('jobs');
         Route::livewire('invoices', 'pages::admin.invoices')->name('invoices');

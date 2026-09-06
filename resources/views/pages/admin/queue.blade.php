@@ -469,7 +469,7 @@ class extends Component {
                         <span>{{ $ticket->reference }}</span>
                         <span>·</span>
                         <span>{{ $ticket->team->name }}</span>
-                        <span class="ms-auto">{{ __('raised :when', ['when' => $ticket->created_at->format('j M, H:i')]) }}</span>
+                        <span class="ms-auto">{{ __('raised :when', ['when' => shown($ticket->created_at)->format('j M, H:i')]) }}</span>
                     </div>
 
                     <x-rsc.heading :level="2" class="!text-[clamp(20px,2.2vw,28px)]">{{ $ticket->title }}</x-rsc.heading>
@@ -509,7 +509,7 @@ class extends Component {
                 <x-rsc.panel>
                     <div class="mb-[18px] flex items-center justify-between font-mono text-[11px] tracking-[0.08em] text-muted">
                         <span>time_quote</span>
-                        <span>{{ $ticket->quote_sent_at ? __('sent :when', ['when' => $ticket->quote_sent_at->format('j M')]) : __('not sent') }}</span>
+                        <span>{{ $ticket->quote_sent_at ? __('sent :when', ['when' => shown($ticket->quote_sent_at)->format('j M')]) : __('not sent') }}</span>
                     </div>
 
                     <div class="grid items-end gap-4 [grid-template-columns:repeat(auto-fit,minmax(120px,1fr))]">
