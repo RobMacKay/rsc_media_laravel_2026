@@ -269,7 +269,7 @@ class Ticket extends Model implements HasAttachments
     public function updatedLabel(): string
     {
         return $this->status === TicketStatus::Resolved && $this->resolved_at
-            ? 'Closed '.$this->resolved_at->format('j F')
+            ? 'Closed '.shown($this->resolved_at)->format('j F')
             : 'Updated '.$this->updated_at->diffForHumans();
     }
 

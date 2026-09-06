@@ -231,7 +231,7 @@ class extends Component {
                     <div class="mb-2 flex items-center gap-2.5">
                         <span class="rounded-full px-2.5 py-[3px] font-mono text-[10px] tracking-[0.08em]"
                               style="color: var(--rsc-{{ $update->kind->tone() === 'warm' ? 'warm' : 'accent' }}); background: color-mix(in srgb, var(--rsc-{{ $update->kind->tone() === 'warm' ? 'warm' : 'accent' }}) 15%, transparent)">{{ $update->tag }}</span>
-                        <span class="font-mono text-[11px] text-muted">{{ $update->published_at->format('j M') }}</span>
+                        <span class="font-mono text-[11px] text-muted">{{ shown($update->published_at)->format('j M') }}</span>
                     </div>
                     <div class="mb-[5px] font-display text-base font-bold tracking-[-0.015em]">{{ $update->title }}</div>
                     <p class="m-0 text-sm leading-[1.55] text-muted text-pretty">{{ $update->body }}</p>

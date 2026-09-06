@@ -69,6 +69,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Display Timezone
+    |--------------------------------------------------------------------------
+    |
+    | Timestamps are stored in UTC, which is unambiguous and never shifts under
+    | us. This is the timezone they are shown in. Use `->forDisplay()` on any
+    | timestamp before formatting it, or a ticket raised at half past midnight
+    | in the summer is shown as the day before.
+    |
+    */
+
+    'display_timezone' => env('APP_DISPLAY_TIMEZONE', 'Europe/London'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |

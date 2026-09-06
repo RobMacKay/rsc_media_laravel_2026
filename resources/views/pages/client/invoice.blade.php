@@ -210,7 +210,7 @@ class extends Component {
                     <p class="mt-2.5 mb-0 text-[13px] text-muted">{{ __('No VAT is charged on this invoice.') }}</p>
                 @endunless
                 @if (! $invoice->status->isOutstanding() && $invoice->paid_at)
-                    <p class="mt-2.5 mb-0 text-[15px]">{{ __('Paid :when — thank you.', ['when' => $invoice->paid_at->format('j F Y')]) }}</p>
+                    <p class="mt-2.5 mb-0 text-[15px]">{{ __('Paid :when — thank you.', ['when' => shown($invoice->paid_at)->format('j F Y')]) }}</p>
                 @endif
             </div>
         </div>
