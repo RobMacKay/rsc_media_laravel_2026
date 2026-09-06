@@ -4,7 +4,15 @@ use App\Console\Commands\ChaseInvoices;
 use App\Console\Commands\CheckSites;
 use App\Console\Commands\RaisePlanInvoices;
 use App\Models\TeamInvitation;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schedule;
+
+// Leaves a mark the preflight check can read. Everything else on this schedule
+// only queues work, so without this there is no way to tell from inside the
+// application whether the scheduler is running at all.
+Schedule::call(fn () => Cache::forever('scheduler.last_run', now()->toIso8601String()))
+    ->everyMinute()
+    ->description('Record that the scheduler ran');
 
 Schedule::call(function () {
     TeamInvitation::query()
