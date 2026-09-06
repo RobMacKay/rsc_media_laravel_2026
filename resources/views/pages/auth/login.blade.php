@@ -45,6 +45,8 @@
             <span>{{ __('Keep me signed in on this device') }}</span>
         </label>
 
+        <x-rsc.turnstile action="login" />
+
         <x-rsc.button type="submit" data-test="login-button" class="!px-[26px] !py-[15px]">{{ __('Log in') }}</x-rsc.button>
 
         <p class="m-0 text-center text-[13px] text-muted">

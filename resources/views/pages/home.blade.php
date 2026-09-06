@@ -3,6 +3,7 @@
 use App\Models\Enquiry;
 use App\Models\Plan;
 use App\Models\User;
+use App\Rules\TurnstileToken;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\Rule;
@@ -27,6 +28,9 @@ class extends Component {
 
     public bool $sent = false;
 
+    /** Proof the form was filled in by a person, set by the Turnstile widget. */
+    public string $turnstileToken = '';
+
     /**
      * Get the support plans advertised on the public site.
      *
@@ -49,13 +53,16 @@ class extends Component {
             'company' => ['nullable', 'string', 'max:255'],
             'topic' => ['required', Rule::in(array_keys(Enquiry::TOPICS))],
             'message' => ['required', 'string', 'max:5000'],
-        ]);
+            'turnstileToken' => TurnstileToken::rules(),
+        ], TurnstileToken::messages('turnstileToken'));
+
+        unset($validated['turnstileToken']);
 
         $enquiry = Enquiry::create($validated);
 
         Notification::send(User::query()->where('is_admin', true)->get(), new \App\Notifications\NewEnquiry($enquiry));
 
-        $this->reset('name', 'email', 'company', 'message');
+        $this->reset('name', 'email', 'company', 'message', 'turnstileToken');
         $this->sent = true;
     }
 }; ?>
@@ -494,6 +501,8 @@ class extends Component {
                                                 placeholder="{{ __('What\'s not working, or what you\'d like to be able to do.') }}"
                                                 class="!rounded-[10px] !px-[13px] !py-[11px] !text-sm" />
                             </x-rsc.field>
+
+                            <x-rsc.turnstile action="enquiry" on="submit" model="turnstileToken" />
 
                             <x-rsc.button type="submit" class="self-start !px-6 !py-3.5 !font-sans !font-semibold">{{ __('Send it over') }}</x-rsc.button>
 
