@@ -10,8 +10,11 @@ use App\Http\Responses\RegisterResponse;
 use App\Http\Responses\TwoFactorLoginResponse;
 use App\Http\Responses\VerifyEmailResponse;
 use App\Models\TeamInvitation;
+use App\Models\User;
+use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -44,6 +47,23 @@ class FortifyServiceProvider extends ServiceProvider
         $this->configureActions();
         $this->configureViews();
         $this->configureRateLimiting();
+        $this->configureVerificationEmail();
+    }
+
+    /**
+     * Put the confirmation email in the same voice as every other one we send.
+     *
+     * Laravel's stock wording is fine and completely anonymous; this is the
+     * first thing a new client ever gets from us.
+     */
+    private function configureVerificationEmail(): void
+    {
+        VerifyEmail::toMailUsing(fn (User $notifiable, string $url) => (new MailMessage)
+            ->subject(__('Confirm your email address'))
+            ->greeting(__('Hello :name,', ['name' => str($notifiable->name)->before(' ')]))
+            ->line(__('One click and your RSC Media client area is open: projects, tickets, invoices and the health of your sites, all in one place.'))
+            ->action(__('Confirm my email'), $url)
+            ->line(__('If you did not sign up, ignore this and nothing happens.')));
     }
 
     /**

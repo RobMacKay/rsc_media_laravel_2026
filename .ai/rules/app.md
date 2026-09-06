@@ -96,9 +96,35 @@ Recipients are `team.billing_email` if set, else members whose access `canSeeBil
 
 `reminders_paused_at` mutes one invoice (the "mute" control on the admin list); `studio_settings.invoice_reminders` turns the emails off entirely while still marking things overdue.
 
-## New tickets email the studio, and the queue flags what has never been opened
-Raising a ticket in `pages::client.tickets` sends `App\Notifications\TicketRaised` to every `is_admin` user (same pattern as `NewEnquiry`), with the priority in the subject and a deep link to `admin.queue?ticket=REF`. Nothing else raises tickets today; if another entry point appears, send it there too.
+## Turnstile guards the public forms only, and is invisible by design
+`App\Support\Turnstile` is the one place a token is checked. It is off unless BOTH `services.turnstile.site_key` and `secret_key` are set — local and CI run with neither, so the forms behave as they always did and `TurnstileToken::rules()` returns an empty rule set.
 
-`Ticket::isUnseenBy($user)` is narrower than `hasUpdateFor($user)`: no read row at all, meaning brand new to the studio. The admin queue uses it for the warm "new" pill and row tint, and reserves the brand "updated" pill for a ticket that has moved since it was last read. Both rely on `withReadsFor()` being on the query.
+Widgets use `appearance: interaction-only`, deliberately not the "invisible" widget type: invisible has no way to ask a visitor Cloudflare is unsure about, so a false positive is simply turned away. Interaction-only draws nothing for almost everyone and falls back to a checkbox for the few who need one.
 
-The queue's ordering is `$sort` (urgency | newest | activity) via `sortBy()`, which whitelists against the `sorts()` computed property — keep the two in step rather than trusting the URL value.
+Verification fails **open** when Cloudflare cannot be reached or answers 5xx (logged, submission allowed) and fails **closed** on an actual negative verdict or a missing token. An outage at their end must not take the enquiry form down.
+
+Guarded surfaces are the unauthenticated ones only: the enquiry form (Livewire, via `TurnstileToken`) and Fortify's `register.store`, `password.email`, `login.store` (via `VerifyTurnstile`, listed in `PROTECTED_ROUTES`). Never inside `/client` or `/admin`.
+
+Two traps, both hit for real while building this:
+- A token is single use. On the Livewire form the widget re-challenges on **every** submit and forgets the token straight after, because reusing one is refused as `timeout-or-duplicate` — which looks like a broken form. Do not "optimise" that away.
+- `Livewire.hook('commit')` registered from inside an Alpine `x-data` on a `wire:ignore` div does not reliably fire. The submit-capture approach in `components/rsc/turnstile.blade.php` replaced it.
+
+Test with Cloudflare's keys: site `1x00000000000000000000AA` passes, `3x00000000000000000000FF` forces the visible challenge, secret `1x0000000000000000000000000000000AA` passes and `2x0000000000000000000000000000000AA` fails.
+
+## The honeypot and the clock, in front of Turnstile
+`App\Support\PublicForms::ROUTES` is the one list of unauthenticated forms; both `VerifyHoneypot` and `VerifyTurnstile` read it, so a new public form is guarded by adding it there. `TIMED_ROUTES` is the narrower list that also refuses a submission returned in under `Honeypot::MIN_SECONDS` — registration only. Login is deliberately not timed: a saved password gets someone through in well under a second, and turning a returning client away costs more than the spam it stops.
+
+The trap field is `sr-only` + `aria-hidden` + `tabindex=-1`, not `display:none`: some bots skip hidden fields. It must stay clipped rather than pushed off-screen with a negative offset — an absolutely positioned element with no positioned ancestor can widen the page.
+
+On plain forms the timestamp is an **encrypted** hidden input, so the clock cannot be wound back by editing the page. On the Livewire enquiry form it is `#[Locked]` — a plain public Livewire property can be set by whoever is on the other end, so without the attribute a script would simply post an hour-old timestamp and walk past the check.
+
+Tests: `typedByHand()` adds a stamp aged a minute for plain form posts, and `enquiryForm()` opens the Livewire form and travels past the minimum. Any new test that posts to a public form needs one of them, or it is refused for being impossibly fast.
+
+## Email confirmation is on, and every email needs a queue worker
+`User` implements `MustVerifyEmail`, so registering fires the confirmation link and the `verified` middleware on the client and admin groups is live. Before this the contract was commented out: the Fortify feature and routes existed but nothing was ever sent and `verified` waved everyone through.
+
+The wording is overridden with `VerifyEmail::toMailUsing()` in `FortifyServiceProvider::configureVerificationEmail()` — Laravel's stock copy is anonymous, and this is the first thing a new client gets from us.
+
+Studio-opened accounts never get a confirmation email: `pages::auth.set-password` stamps `email_verified_at` when they choose a password, because the studio typed the address and the person proved they read it. The backfill migration honours that by skipping anyone with `must_set_password`.
+
+**Nothing this app emails leaves the server without a queue worker.** Every notification is `ShouldQueue` and `QUEUE_CONNECTION=database`, so with no worker the jobs simply pile up in the `jobs` table with no error anywhere — that includes the confirmation link, ticket alerts, enquiry alerts, invoice chases and site-down warnings. The scheduler being on is not enough: `sites:check` and `invoices:chase` only queue the mail. Forge needs the worker and a real `MAIL_MAILER` as well as the scheduler.

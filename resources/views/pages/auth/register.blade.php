@@ -97,6 +97,10 @@
                          passwordrules="{{ \Illuminate\Validation\Rules\Password::defaults()->toPasswordRulesString() }}" />
         </x-rsc.field>
 
+        <x-rsc.honeypot timed />
+
+        <x-rsc.turnstile action="register" />
+
         <x-rsc.button type="submit" data-test="register-user-button" class="!px-[26px] !py-[15px]">
             {{ __('Create account') }}
         </x-rsc.button>

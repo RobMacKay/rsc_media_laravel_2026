@@ -4,7 +4,10 @@ use App\Enums\ClientAccess;
 use App\Enums\TeamRole;
 use App\Models\Team;
 use App\Models\User;
+use App\Support\Honeypot;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Crypt;
+use Livewire\Features\SupportTesting\Testable;
 use Tests\TestCase;
 
 /*
@@ -47,6 +50,40 @@ expect()->extend('toBeOne', function () {
 | global functions to help you to reduce the number of lines of code in your test files.
 |
 */
+
+/**
+ * Add the fields a real browser would send, filled in at human speed.
+ *
+ * The public forms refuse a submission that comes back instantly, so a test
+ * posting straight to one has to look like somebody who actually typed it.
+ *
+ * @param  array<string, mixed>  $fields
+ * @return array<string, mixed>
+ */
+function typedByHand(array $fields = []): array
+{
+    return [
+        Honeypot::STAMP => Crypt::encryptString(
+            (string) now()->subMinute()->getTimestamp(),
+        ),
+        ...$fields,
+    ];
+}
+
+/**
+ * Open the enquiry form and let enough time pass to have typed it in.
+ *
+ * The form refuses anything that comes back instantly, which no test filling
+ * fields in through Livewire would otherwise wait for.
+ */
+function enquiryForm(): Testable
+{
+    $form = Livewire\Livewire::test('pages::home');
+
+    test()->travel(Honeypot::MIN_SECONDS + 1)->seconds();
+
+    return $form;
+}
 
 /**
  * Add a user to a client business at the given access level.
