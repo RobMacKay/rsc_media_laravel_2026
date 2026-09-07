@@ -3,12 +3,15 @@
 use App\Http\Controllers\AttachmentDownloadController;
 use App\Http\Controllers\InvoiceDownloadController;
 use App\Http\Controllers\SiteLogDownloadController;
+use App\Http\Controllers\WebManifestController;
 use App\Http\Middleware\EnsureUserHasClientAccess;
 use App\Http\Middleware\EnsureUserHasOnboarded;
 use App\Http\Middleware\EnsureUserIsStudioAdmin;
 use Illuminate\Support\Facades\Route;
 
 Route::livewire('/', 'pages::home')->name('home');
+
+Route::get('site.webmanifest', WebManifestController::class)->name('manifest');
 
 Route::name('legal.')->group(function () {
     Route::livewire('privacy', 'pages::legal.privacy')->name('privacy');
