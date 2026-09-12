@@ -126,7 +126,7 @@ test('the studio can raise the final invoice for a project', function () {
 
     $final = Invoice::where('type', InvoiceType::Final)->sole();
 
-    expect($final->amount)->toBe(3072)
+    expect($final->amount)->toBe(3072.0)
         ->and($final->project_id)->toBe($project->id)
         ->and($final->vat_rate)->toBe(20.0)
         ->and($final->due_on->toDateString())->toBe(now()->addDays(14)->toDateString())
@@ -161,7 +161,7 @@ test('the studio can invoice an approved chargeable ticket', function () {
 
     $invoice = Invoice::sole();
 
-    expect($invoice->amount)->toBe(260)
+    expect($invoice->amount)->toBe(260.0)
         ->and($invoice->type)->toBe(InvoiceType::AdHoc)
         ->and($invoice->ticket_id)->toBe($ticket->id)
         ->and($invoice->note)->toContain($ticket->reference);

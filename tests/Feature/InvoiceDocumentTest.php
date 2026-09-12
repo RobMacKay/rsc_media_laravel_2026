@@ -27,6 +27,30 @@ test('a client can view their own invoice', function () {
         ->assertSee('£216.00'); // total
 });
 
+test('an invoice with pence shows them on the document and its PDF', function () {
+    $team = Team::factory()->create();
+    Invoice::factory()->for($team)->create([
+        'number' => 'IN-0048',
+        'note' => 'Website work',
+        'amount' => 540.10,
+        'discount' => 19,
+        'vat_rate' => 0,
+    ]);
+
+    $user = memberOf($team, ClientAccess::Full);
+
+    $this->actingAs($user)
+        ->get(route('client.invoices.show', 'IN-0048'))
+        ->assertOk()
+        ->assertSee('£540.10');
+
+    $pdf = $this->actingAs($user)->get(route('client.invoices.pdf', 'IN-0048'));
+
+    $pdf->assertOk()->assertDownload('IN-0048.pdf');
+
+    expect($pdf->getContent())->toStartWith('%PDF');
+});
+
 test('the invoice shows the studio letterhead and bank details', function () {
     StudioSetting::current()->update([
         'company_name' => 'RSC Media Ltd',
