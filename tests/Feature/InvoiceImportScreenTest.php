@@ -104,6 +104,54 @@ test('confirming with the payments export fills in the dates', function () {
         ->toBe('2025-04-10');
 });
 
+test('a CSV that is not the invoice report is refused against the invoices field', function () {
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.import')
+        ->set('invoices', uploadedExport('invoice-ninja-clients.csv', 'report.csv'))
+        ->call('preview')
+        ->assertHasErrors('invoices')
+        ->assertSee('does not look like the Invoice report');
+
+    $this->assertDatabaseCount('invoices', 0);
+});
+
+test('the payments report uploaded as the invoice export says which box it belongs in', function () {
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.import')
+        ->set('invoices', uploadedExport('invoice-ninja-payments.csv', 'payments.csv'))
+        ->call('preview')
+        ->assertHasErrors('invoices')
+        ->assertSee('goes in the payments box');
+});
+
+test('a row with an unreadable date is reported by row number and nothing is written', function () {
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.import')
+        ->set('invoices', uploadedExport('invoice-ninja-invoices-bad-date.csv', 'invoices.csv'))
+        ->call('preview')
+        ->assertHasErrors('invoices')
+        ->assertSee('Row 2');
+
+    $this->assertDatabaseCount('invoices', 0);
+});
+
+test('an empty file is refused', function () {
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.import')
+        ->set('invoices', uploadedExport('invoice-ninja-empty.csv', 'empty.csv'))
+        ->call('preview')
+        ->assertHasErrors('invoices');
+});
+
+test('a spreadsheet saved with semicolons still previews', function () {
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.import')
+        ->set('invoices', uploadedExport('invoice-ninja-invoices-semicolon-bom.csv', 'excel.csv'))
+        ->call('preview')
+        ->assertHasNoErrors()
+        ->assertSee('6 invoices to import');
+});
+
 test('the invoice report uploaded as the payments report is refused against that field', function () {
     importScreen(uploadedExport('invoice-ninja-invoices.csv', 'wrong.csv'))
         ->call('preview')

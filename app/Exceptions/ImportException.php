@@ -36,6 +36,65 @@ class ImportException extends RuntimeException
     }
 
     /**
+     * The file has no rows in it at all.
+     */
+    public static function empty(string $field = 'invoices'): self
+    {
+        return new self('That file is empty. Export the report from Invoice Ninja again.', $field);
+    }
+
+    /**
+     * The file parsed, but it is not the report we were asked for.
+     *
+     * Names what is missing and what was actually there, because "undefined
+     * array key" tells whoever uploaded it nothing about which of the dozen
+     * Invoice Ninja reports they picked.
+     *
+     * @param  list<string>  $missing
+     * @param  list<string>  $columns
+     */
+    public static function wrongReport(array $missing, array $columns, string $field = 'invoices'): self
+    {
+        $looksLikePayments = in_array('Payment Date', $columns, true);
+
+        return new self(
+            'That does not look like the Invoice report. It is missing '
+            .self::list($missing).'. '
+            .($looksLikePayments
+                ? 'It looks like the Payment report — that one goes in the payments box below.'
+                : 'In Invoice Ninja the report type has to be "Invoice".')
+            .' Columns found: '.implode(', ', $columns).'.',
+            $field,
+        );
+    }
+
+    /**
+     * A row carries something where a date should be.
+     */
+    public static function badDate(int $line, string $column, string $value, string $field = 'invoices'): self
+    {
+        return new self(
+            "Row {$line} has \"{$value}\" in the {$column} column, which is not a date. "
+            .'Fix that row in the export and upload it again.',
+            $field,
+        );
+    }
+
+    /**
+     * Join names into a readable list.
+     *
+     * @param  list<string>  $names
+     */
+    private static function list(array $names): string
+    {
+        $quoted = array_map(fn (string $name) => '"'.$name.'"', $names);
+
+        return count($quoted) === 1
+            ? $quoted[0]
+            : implode(', ', array_slice($quoted, 0, -1)).' and '.end($quoted);
+    }
+
+    /**
      * The payments file has no payment dates in it, which almost always means
      * the Invoice report was exported instead of the Payment one.
      *

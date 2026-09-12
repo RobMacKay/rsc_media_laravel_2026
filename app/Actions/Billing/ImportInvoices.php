@@ -13,6 +13,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Throwable;
 
 /**
  * Bring the studio's invoice history over from Invoice Ninja.
@@ -71,6 +72,7 @@ class ImportInvoices
     public function handle(string $invoicesPath, ?string $paymentsPath = null, bool $dryRun = false): array
     {
         $rows = $this->read($invoicesPath);
+        $this->requireInvoiceColumns($rows);
         $this->teams = Team::withTrashed()->get();
         $paidDates = $paymentsPath === null ? [] : $this->paymentDates($paymentsPath);
 
@@ -84,8 +86,19 @@ class ImportInvoices
         DB::beginTransaction();
 
         try {
-            foreach ($rows as $row) {
-                $number = Invoice::ImportPrefix.'-'.trim($row['Invoice Invoice Number']);
+            foreach ($rows as $index => $row) {
+                $line = $index + 2;
+                $reference = trim($row['Invoice Invoice Number']);
+
+                // A row with no number of its own cannot be told apart from
+                // any other, so it is not something to guess at.
+                if ($reference === '') {
+                    $skipped[] = 'row '.$line;
+
+                    continue;
+                }
+
+                $number = Invoice::ImportPrefix.'-'.$reference;
                 $existing = Invoice::query()->where('number', $number)->first();
 
                 if ($existing !== null) {
@@ -99,7 +112,7 @@ class ImportInvoices
                 }
 
                 $team = $this->team($row, $teamsCreated);
-                $invoice = $this->build($row, $team, $number, $paidDates);
+                $invoice = $this->build($row, $team, $number, $paidDates, $line);
 
                 if ($invoice->paid_at !== null) {
                     $dated++;
@@ -116,7 +129,7 @@ class ImportInvoices
             }
 
             $dryRun ? DB::rollBack() : DB::commit();
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             DB::rollBack();
 
             throw $e;
@@ -196,10 +209,10 @@ class ImportInvoices
      * @param  array<string, string>  $row
      * @param  array<string, Carbon>  $paidDates
      */
-    private function build(array $row, Team $team, string $number, array $paidDates): Invoice
+    private function build(array $row, Team $team, string $number, array $paidDates, int $line): Invoice
     {
-        $status = self::Statuses[trim($row['Invoice Status'])] ?? InvoiceStatus::Sent;
-        $issued = Carbon::parse($row['Invoice Date']);
+        $status = self::Statuses[trim($this->value($row, 'Invoice Status'))] ?? InvoiceStatus::Sent;
+        $issued = $this->date($this->value($row, 'Invoice Date'), $line, 'Invoice Date');
 
         $invoice = new Invoice([
             'number' => $number,
@@ -209,11 +222,11 @@ class ImportInvoices
             // RaisePlanInvoices would read them as this month's plan invoice
             // already being raised.
             'type' => InvoiceType::AdHoc,
-            'note' => $this->note($row['Invoice Public Notes']),
-            'amount' => $this->money($row['Invoice Amount']),
-            'paid_to_date' => $this->money($row['Invoice Paid to Date']),
-            'discount' => $this->money($row['Invoice Discount']),
-            'po_number' => $this->text($row['Invoice PO Number']),
+            'note' => $this->note($this->value($row, 'Invoice Public Notes')),
+            'amount' => $this->money($this->value($row, 'Invoice Amount')),
+            'paid_to_date' => $this->money($this->value($row, 'Invoice Paid to Date')),
+            'discount' => $this->money($this->value($row, 'Invoice Discount')),
+            'po_number' => $this->text($this->value($row, 'Invoice PO Number')),
             // Whatever the client and the accountant already have on file.
             'external_reference' => trim($row['Invoice Invoice Number']),
             // No row in the export carries any tax: the studio is not
@@ -221,7 +234,7 @@ class ImportInvoices
             'vat_rate' => 0,
             'currency' => $team->currency,
             'issued_on' => $issued,
-            'due_on' => $this->dueDate($row, $team, $issued),
+            'due_on' => $this->dueDate($row, $team, $issued, $line),
             'status' => $status,
             // Imported history is brought over for the record, not to restart
             // collections. Whatever chasing these needed happened in the old
@@ -289,7 +302,7 @@ class ImportInvoices
     private function team(array $row, array &$created): Team
     {
         $name = trim($row['Client Name']);
-        $currency = Currency::tryFrom(trim($row['Client Currency'])) ?? Currency::Base;
+        $currency = Currency::tryFrom(trim($this->value($row, 'Client Currency'))) ?? Currency::Base;
 
         $team = $this->teams->first(fn (Team $team) => $this->matches($team->name, $name));
 
@@ -331,13 +344,13 @@ class ImportInvoices
      *
      * @param  array<string, string>  $row
      */
-    private function dueDate(array $row, Team $team, Carbon $issued): Carbon
+    private function dueDate(array $row, Team $team, Carbon $issued, int $line): Carbon
     {
-        $due = $this->text($row['Invoice Due Date']);
+        $due = $this->text($this->value($row, 'Invoice Due Date'));
 
         return $due === null
             ? $issued->copy()->addDays($team->effectivePaymentTerms($this->settings))
-            : Carbon::parse($due);
+            : $this->date($due, $line, 'Invoice Due Date');
     }
 
     /**
@@ -416,6 +429,16 @@ class ImportInvoices
     }
 
     /**
+     * The columns the invoice export cannot be read without.
+     */
+    private const Required = [
+        'Invoice Invoice Number',
+        'Client Name',
+        'Invoice Date',
+        'Invoice Amount',
+    ];
+
+    /**
      * Read a CSV into rows keyed by column name.
      *
      * @return list<array<string, string>>
@@ -427,17 +450,26 @@ class ImportInvoices
         }
 
         $handle = fopen($path, 'r');
-        $header = fgetcsv($handle, escape: '');
+        $separator = $this->separator($path);
+        $header = fgetcsv($handle, separator: $separator, escape: '');
 
-        if ($header === false) {
+        if ($header === false || $header === [null]) {
             fclose($handle);
 
-            return [];
+            throw ImportException::empty($field);
         }
+
+        // A spreadsheet that has been through Excel starts with a byte order
+        // mark, which would otherwise make the first column name unmatchable
+        // while looking identical in any error message.
+        $header = array_map(
+            fn ($name) => trim(preg_replace('/^\xEF\xBB\xBF/', '', (string) $name) ?? ''),
+            $header,
+        );
 
         $rows = [];
 
-        while (($line = fgetcsv($handle, escape: '')) !== false) {
+        while (($line = fgetcsv($handle, separator: $separator, escape: '')) !== false) {
             // The export ends with a blank line, and a short row would
             // silently shift every value along by one.
             if ($line === [null] || count(array_filter($line, fn ($value) => (string) $value !== '')) === 0) {
@@ -450,6 +482,81 @@ class ImportInvoices
         fclose($handle);
 
         return $rows;
+    }
+
+    /**
+     * Work out which character separates the columns.
+     *
+     * Invoice Ninja writes commas, but a file that has been opened and saved
+     * again in Excel can come back semicolon or tab separated depending on the
+     * machine's locale, and that parses as one enormous column rather than
+     * failing outright.
+     */
+    private function separator(string $path): string
+    {
+        $handle = fopen($path, 'r');
+        $first = (string) fgets($handle);
+        fclose($handle);
+
+        $counts = [
+            ',' => substr_count($first, ','),
+            ';' => substr_count($first, ';'),
+            "\t" => substr_count($first, "\t"),
+        ];
+
+        arsort($counts);
+
+        return $counts[','] > 0 ? ',' : (string) array_key_first($counts);
+    }
+
+    /**
+     * Refuse a file that is not the report we were asked for.
+     *
+     * Checked up front against the header rather than discovered on the first
+     * row, so uploading the wrong one of Invoice Ninja's reports says which
+     * report it wanted instead of failing on an undefined array key.
+     *
+     * @param  list<array<string, string>>  $rows
+     */
+    private function requireInvoiceColumns(array $rows): void
+    {
+        if ($rows === []) {
+            return;
+        }
+
+        $columns = array_keys($rows[0]);
+        $missing = array_values(array_diff(self::Required, $columns));
+
+        if ($missing !== []) {
+            throw ImportException::wrongReport($missing, $columns);
+        }
+    }
+
+    /**
+     * Read a column that a given export may not carry at all.
+     *
+     * Only the four columns in self::Required are insisted on; everything else
+     * is read through here, so a narrower report still imports what it does
+     * have rather than falling over on a column nobody needed.
+     *
+     * @param  array<string, string>  $row
+     */
+    private function value(array $row, string $column): string
+    {
+        return (string) ($row[$column] ?? '');
+    }
+
+    /**
+     * Parse a date column, saying which row is wrong rather than throwing a
+     * parser error at whoever uploaded the file.
+     */
+    private function date(string $value, int $line, string $column): Carbon
+    {
+        try {
+            return Carbon::parse($value);
+        } catch (Throwable) {
+            throw ImportException::badDate($line, $column, $value);
+        }
     }
 
     /**

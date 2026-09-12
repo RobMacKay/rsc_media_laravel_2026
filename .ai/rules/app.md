@@ -96,6 +96,8 @@ The uploads are deleted as soon as the run finishes, either way. Note that Livew
 holding the original filename and size, so the screen deletes both — it tells the studio the
 files have been deleted and that has to be true.
 
+Whatever gets uploaded, it must not reach a row access and die on an undefined array key — the studio has a folder full of CSVs and `report.csv` is one keystroke from `report (1).csv`. So `read()` strips the byte order mark Excel leaves on the first column name and sniffs the separator (a re-saved export can come back semicolon or tab separated by locale), `requireInvoiceColumns()` checks the header up front and names both what is missing and what was actually found, and everything outside `ImportInvoices::Required` is read through `value()` so a narrower report still imports what it has. A file with `Payment Date` in the invoices slot is told it belongs in the other box, and vice versa. Dates go through `date()`, which reports the row number rather than throwing a parser error, and a row with no invoice number is skipped rather than guessed at.
+
 `App\Exceptions\ImportException` carries the `field()` it belongs against, so the screen can
 put "the report type has to be Payment, not Invoice" under the payments dropzone instead of
 failing with no clue which of the two files was wrong.

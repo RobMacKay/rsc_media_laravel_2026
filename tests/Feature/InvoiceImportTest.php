@@ -5,6 +5,7 @@ use App\Actions\Billing\ImportInvoices;
 use App\Enums\Currency;
 use App\Enums\InvoiceStatus;
 use App\Enums\InvoiceType;
+use App\Exceptions\ImportException;
 use App\Models\Invoice;
 use App\Models\StudioSetting;
 use App\Models\Team;
@@ -261,6 +262,93 @@ test('an unpaid invoice is not dated even when the payments export mentions it',
 
     // 0113 is only part paid, so it has no settled date to record.
     expect(Invoice::query()->where('number', 'IN-0113')->value('paid_at'))->toBeNull();
+});
+
+describe('the file it is handed is not the report it needs', function () {
+    test('the clients report is refused, naming what is missing', function () {
+        expect(fn () => (new ImportInvoices(StudioSetting::current()))
+            ->handle(base_path('tests/Fixtures/invoice-ninja-clients.csv')))
+            ->toThrow(ImportException::class, 'does not look like the Invoice report');
+    });
+
+    test('the payments report in the invoices slot says which box it belongs in', function () {
+        try {
+            (new ImportInvoices(StudioSetting::current()))->handle(paymentsExport());
+        } catch (ImportException $e) {
+            expect($e->getMessage())->toContain('goes in the payments box')
+                ->and($e->field())->toBe('invoices');
+
+            return;
+        }
+
+        $this->fail('The payments report was accepted as the invoice export.');
+    });
+
+    test('an empty file is refused rather than read as no invoices', function () {
+        expect(fn () => (new ImportInvoices(StudioSetting::current()))
+            ->handle(base_path('tests/Fixtures/invoice-ninja-empty.csv')))
+            ->toThrow(ImportException::class, 'That file is empty');
+    });
+
+    test('a missing file is refused against the upload it was for', function () {
+        try {
+            (new ImportInvoices(StudioSetting::current()))->handle('/no/such/export.csv');
+        } catch (ImportException $e) {
+            expect($e->field())->toBe('invoices');
+
+            return;
+        }
+
+        $this->fail('A path that does not exist was accepted.');
+    });
+
+    test('nothing is written when the wrong report is handed over', function () {
+        try {
+            (new ImportInvoices(StudioSetting::current()))
+                ->handle(base_path('tests/Fixtures/invoice-ninja-clients.csv'));
+        } catch (ImportException) {
+            // The point of the test is what it left behind.
+        }
+
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertDatabaseCount('teams', 0);
+    });
+});
+
+test('a semicolon separated export written by a spreadsheet still imports', function () {
+    // Excel rewrites the separator by locale and leaves a byte order mark on
+    // the first column name, which would otherwise be unmatchable.
+    (new ImportInvoices(StudioSetting::current()))
+        ->handle(base_path('tests/Fixtures/invoice-ninja-invoices-semicolon-bom.csv'));
+
+    expect(Invoice::count())->toBe(6)
+        ->and(Invoice::query()->where('number', 'IN-0048')->value('amount'))->toBe(540.1);
+});
+
+test('a row with something other than a date in it says which row', function () {
+    try {
+        (new ImportInvoices(StudioSetting::current()))
+            ->handle(base_path('tests/Fixtures/invoice-ninja-invoices-bad-date.csv'));
+    } catch (ImportException $e) {
+        expect($e->getMessage())->toContain('Row 2')
+            ->and($e->getMessage())->toContain('not a date');
+
+        $this->assertDatabaseCount('invoices', 0);
+
+        return;
+    }
+
+    $this->fail('A row with no usable date was imported anyway.');
+});
+
+test('a row with no invoice number is skipped rather than guessed at', function () {
+    (new ImportInvoices(StudioSetting::current()))
+        ->handle(base_path('tests/Fixtures/invoice-ninja-invoices-missing-number.csv'));
+
+    // The good row comes in; the one with nothing to identify it does not,
+    // because a blank number cannot be told apart from any other blank.
+    expect(Invoice::count())->toBe(1)
+        ->and(Invoice::query()->value('number'))->toBe('IN-0048');
 });
 
 test('the invoice report handed over as the payments report is refused', function () {
