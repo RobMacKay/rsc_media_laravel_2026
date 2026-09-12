@@ -128,7 +128,7 @@ test('an invoice takes its VAT and terms from settings and the client', function
 
     $invoice = Invoice::sole();
 
-    expect($invoice->amount)->toBe(1000)
+    expect($invoice->amount)->toBe(1000.0)
         ->and($invoice->vat_rate)->toBe(20.0)
         ->and($invoice->total())->toBe(1200.0)
         ->and($invoice->due_on->toDateString())->toBe(now()->addDays(14)->toDateString())

@@ -499,8 +499,8 @@ class extends Component {
             'type' => ['required', Rule::enum(InvoiceType::class)],
             'teamId' => ['required', 'exists:teams,id'],
             'projectId' => ['nullable', 'exists:projects,id'],
-            'amount' => ['required', 'integer', 'min:1'],
-            'note' => ['required', 'string', 'max:255'],
+            'amount' => ['required', 'numeric', 'min:0.01', 'decimal:0,2'],
+            'note' => ['required', 'string', 'max:2000'],
         ]);
 
         $team = Team::findOrFail($validated['teamId']);
@@ -746,6 +746,9 @@ class extends Component {
                         <span>
                             <span class="block font-display text-[15px] font-bold tracking-[-0.015em]">{{ $invoice->team->name }}</span>
                             <span class="mt-[3px] block text-xs text-muted">{{ $invoice->note }}</span>
+                            @if ($invoice->external_reference)
+                                <span class="mt-[3px] block font-mono text-[10px] text-muted">{{ __('their ref :ref', ['ref' => $invoice->external_reference]) }}</span>
+                            @endif
                             @if ($invoice->remindersExhausted())
                                 <span class="mt-1 block font-mono text-[10px] text-warm">{{ __('reminders finished — worth a call') }}</span>
                             @elseif ($invoice->reminder_stage)
@@ -759,9 +762,13 @@ class extends Component {
                                 <span class="mt-[3px] block font-mono text-[10px]">{{ trans_choice('{1}1 day late|[2,*]:count days late', $invoice->daysPastDue(), ['count' => $invoice->daysPastDue()]) }}</span>
                             @endif
                         </span>
-                        <span class="font-display text-[15px] font-bold">{{ $invoice->money($invoice->total()) }}</span>
+                        <span class="font-display text-[15px] font-bold">{{ $invoice->moneyLabel($invoice->total()) }}</span>
                         <span class="flex items-center gap-2.5">
-                            <x-rsc.pill :tone="$invoice->status->tone()">{{ str($invoice->status->label())->lower() }}</x-rsc.pill>
+                            @if ($invoice->record_only)
+                                <x-rsc.pill tone="muted">{{ __('record') }}</x-rsc.pill>
+                            @else
+                                <x-rsc.pill :tone="$invoice->status->tone()">{{ str($invoice->status->label())->lower() }}</x-rsc.pill>
+                            @endif
                             @if ($invoice->status->isOutstanding())
                                 <span class="flex flex-col items-start gap-1">
                                     <button type="button" wire:click="markPaid({{ $invoice->id }})" class="cursor-pointer font-mono text-[10px] text-brand">{{ __('mark paid') }}</button>
@@ -867,7 +874,7 @@ class extends Component {
                             </x-rsc.field>
 
                             <x-rsc.field label="{{ $this->settings->chargesVat() ? 'amount_ex_vat' : 'amount' }}_{{ $currency->symbol() }}" name="amount">
-                                <x-rsc.input type="number" min="0" step="10" wire:model="amount" class="!py-3" />
+                                <x-rsc.input type="number" min="0" step="0.01" wire:model="amount" class="!py-3" />
                             </x-rsc.field>
                         </div>
 

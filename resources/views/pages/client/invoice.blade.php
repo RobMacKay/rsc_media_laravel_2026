@@ -19,6 +19,10 @@ class extends Component {
     {
         abort_unless($invoice->team_id === Auth::user()->current_team_id, 404);
 
+        // A record is the studio's own note of work somebody else billed, so
+        // there is no invoice here for the client to look at.
+        abort_if($invoice->record_only, 404);
+
         $this->invoice = $invoice->load(['team', 'project']);
     }
 
@@ -103,8 +107,8 @@ class extends Component {
                 @if ($invoice->team->billing_email)
                     <div class="text-[13px] text-muted">{{ $invoice->team->billing_email }}</div>
                 @endif
-                @if ($invoice->team->purchase_order_ref)
-                    <div class="mt-1.5 text-[13px] text-muted">{{ __('PO :ref', ['ref' => $invoice->team->purchase_order_ref]) }}</div>
+                @if ($invoice->purchaseOrderRef())
+                    <div class="mt-1.5 text-[13px] text-muted">{{ __('PO :ref', ['ref' => $invoice->purchaseOrderRef()]) }}</div>
                 @endif
             </div>
 
