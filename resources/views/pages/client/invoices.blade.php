@@ -46,7 +46,7 @@ class extends Component {
     #[Computed]
     public function allInvoices(): Collection
     {
-        return $this->team->invoices()->get();
+        return $this->team->invoices()->issued()->get();
     }
 
     /**
@@ -156,7 +156,7 @@ class extends Component {
                         </span>
                         <span class="text-[13px] text-muted">{{ $invoice->issued_on->format('j M') }}</span>
                         <span class="text-[13px] {{ $settled ? 'text-muted' : 'text-warm' }}">{{ $settled ? '—' : $invoice->due_on->format('j M') }}</span>
-                        <span class="font-display text-[15px] font-bold">{{ $invoice->money($invoice->total()) }}</span>
+                        <span class="font-display text-[15px] font-bold">{{ $invoice->moneyLabel($invoice->total()) }}</span>
                         <span class="flex flex-col items-start gap-[7px]">
                             <x-rsc.pill :tone="$invoice->status->tone()">{{ str($invoice->status->label())->lower() }}</x-rsc.pill>
                         </span>

@@ -126,7 +126,7 @@ test('signing off opens the project and raises the deposit invoice', function ()
         ->and($project->phase)->toBe(ProjectPhase::Scoping)
         ->and($project->milestone)->toBe('Scoping')
         ->and($invoice->type)->toBe(InvoiceType::Deposit)
-        ->and($invoice->amount)->toBe(1360)
+        ->and($invoice->amount)->toBe(1360.0)
         ->and($invoice->project_id)->toBe($project->id)
         ->and($invoice->due_on->toDateString())->toBe(now()->addDays(14)->toDateString());
 });

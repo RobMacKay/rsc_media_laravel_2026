@@ -3,6 +3,7 @@
 use App\Console\Commands\ChaseInvoices;
 use App\Console\Commands\CheckSites;
 use App\Console\Commands\RaisePlanInvoices;
+use App\Console\Commands\RaiseRecurringInvoices;
 use App\Models\TeamInvitation;
 use Illuminate\Support\Facades\Schedule;
 
@@ -20,6 +21,14 @@ Schedule::command(RaisePlanInvoices::class)
     ->monthlyOn(1, '07:00')
     ->withoutOverlapping()
     ->description('Raise monthly support plan invoices');
+
+// Standing monthly arrangements. Daily rather than monthly, because each one
+// bills on its own day of the month — the action will not raise a second
+// invoice for a schedule that already has one this month.
+Schedule::command(RaiseRecurringInvoices::class)
+    ->dailyAt('07:15')
+    ->withoutOverlapping()
+    ->description('Raise invoices for standing monthly arrangements');
 
 // Site health. Every fifteen minutes is often enough to catch an outage while
 // it still matters, without hammering a client's site.

@@ -6,6 +6,7 @@ enum InvoiceStatus: string
 {
     case Draft = 'draft';
     case Sent = 'sent';
+    case Partial = 'partial';
     case Overdue = 'overdue';
     case Paid = 'paid';
 
@@ -14,7 +15,10 @@ enum InvoiceStatus: string
      */
     public function label(): string
     {
-        return ucfirst($this->value);
+        return match ($this) {
+            self::Partial => 'Part paid',
+            default => ucfirst($this->value),
+        };
     }
 
     /**
@@ -25,6 +29,7 @@ enum InvoiceStatus: string
         return match ($this) {
             self::Draft => 'muted',
             self::Sent => 'soft',
+            self::Partial => 'warm',
             self::Overdue => 'warm',
             self::Paid => 'brand',
         };
