@@ -83,6 +83,23 @@ Two traps the import already handles, both of which silently corrupt the books i
 
 Anything imported still outstanding arrives with `reminders_paused_at` set. The history is brought over for the record, not to restart collections — without this, inviting an imported client to the portal or setting a billing email on them fires a final notice for an invoice from 2025 that was probably settled outside this system. Unmute the individual ones the studio does still want chased.
 
+The studio uploads the exports at `/admin/import` (`pages::admin.import`) rather than
+passing a path, so the real export never has to sit anywhere it might get committed. Upload,
+preview, confirm: the preview is the action's own `dryRun`, so it runs the whole import in a
+rolled-back transaction and prints the per-currency totals to reconcile before a row is
+written. The CLI command stays for use on a server, and both render from
+`ImportInvoices::summarise()` so the figure on screen and the figure in the terminal cannot
+drift.
+
+The uploads are deleted as soon as the run finishes, either way. Note that Livewire's
+`TemporaryUploadedFile::delete()` removes only the file and leaves a `<name>.json` sidecar
+holding the original filename and size, so the screen deletes both — it tells the studio the
+files have been deleted and that has to be true.
+
+`App\Exceptions\ImportException` carries the `field()` it belongs against, so the screen can
+put "the report type has to be Payment, not Invoice" under the payments dropzone instead of
+failing with no clue which of the two files was wrong.
+
 Re-running the import is safe: an invoice whose number is already there is left alone, and payment dates are backfilled on every run, so the payments export can arrive later than the invoices did. `--dry-run` runs the whole thing in a rolled-back transaction and prints per-currency totals to reconcile against.
 
 ## Money is per client, and never converted

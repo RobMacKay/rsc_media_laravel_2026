@@ -5,6 +5,7 @@ namespace App\Actions\Billing;
 use App\Enums\Currency;
 use App\Enums\InvoiceStatus;
 use App\Enums\InvoiceType;
+use App\Exceptions\ImportException;
 use App\Models\Invoice;
 use App\Models\StudioSetting;
 use App\Models\Team;
@@ -12,7 +13,6 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use RuntimeException;
 
 /**
  * Bring the studio's invoice history over from Invoice Ninja.
@@ -129,6 +129,64 @@ class ImportInvoices
             'dated' => $dated,
             'undated' => $undated,
             'totals' => $totals,
+        ];
+    }
+
+    /**
+     * Reduce a result into plain values fit for rendering.
+     *
+     * Both the command and the import screen render from this, so the figure
+     * the studio reconciles against on screen and the one in the terminal come
+     * from the same arithmetic. It also has to be plain arrays rather than the
+     * models themselves: a dry run has rolled its clients back by the time
+     * anything reports on it, and the screen holds this across a request.
+     *
+     * @param  array{
+     *     invoices: Collection<int, Invoice>,
+     *     skipped: list<string>,
+     *     teams: list<string>,
+     *     dated: int,
+     *     undated: list<string>,
+     *     totals: array<string, float>,
+     * }  $result
+     * @return array{
+     *     clients: list<array{name: string, invoices: int, total: string}>,
+     *     totals: list<array{currency: string, total: string}>,
+     *     imported: int,
+     *     opened: list<string>,
+     *     skipped: int,
+     *     dated: int,
+     *     undated: int,
+     * }
+     */
+    public function summarise(array $result): array
+    {
+        $invoices = $result['invoices'];
+
+        return [
+            'clients' => $invoices
+                ->groupBy(fn (Invoice $invoice) => $invoice->team->name)
+                ->map(fn (Collection $rows, string $name) => [
+                    'name' => $name,
+                    'invoices' => $rows->count(),
+                    'total' => $rows->first()->money((float) $rows->sum('amount'), 2),
+                ])
+                ->sortBy('name')
+                ->values()
+                ->all(),
+            'totals' => collect($result['totals'])
+                ->map(fn (float $total, string $code) => [
+                    'currency' => $code,
+                    'total' => Currency::from($code)->format($total, 2),
+                ])
+                ->sortKeys()
+                ->values()
+                ->all(),
+            'imported' => $invoices->count(),
+            'opened' => $result['teams'],
+            'skipped' => count($result['skipped']),
+            'dated' => $result['dated'],
+            'undated' => count($result['undated']),
         ];
     }
 
@@ -296,7 +354,7 @@ class ImportInvoices
      */
     private function paymentDates(string $path): array
     {
-        $rows = $this->read($path);
+        $rows = $this->read($path, 'payments');
 
         if ($rows === []) {
             return [];
@@ -307,12 +365,7 @@ class ImportInvoices
         $numberColumn = $this->column($columns, ['invoice invoice number', 'invoice number', 'number']);
 
         if ($dateColumn === null || $numberColumn === null) {
-            throw new RuntimeException(
-                'That file has no payment dates in it. In Invoice Ninja the report type has to be '
-                .'"Payment", not "Invoice" — the invoice report filtered to Paid carries the same '
-                .'columns and no payment date at all ("Paid to Date" is an amount, not a date). '
-                .'Columns found: '.implode(', ', $columns).'.'
-            );
+            throw ImportException::noPaymentDates($columns);
         }
 
         $dates = [];
@@ -367,10 +420,10 @@ class ImportInvoices
      *
      * @return list<array<string, string>>
      */
-    private function read(string $path): array
+    private function read(string $path, string $field = 'invoices'): array
     {
         if (! is_readable($path)) {
-            throw new RuntimeException("Cannot read [{$path}].");
+            throw ImportException::unreadable($path, $field);
         }
 
         $handle = fopen($path, 'r');
