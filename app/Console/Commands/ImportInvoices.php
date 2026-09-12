@@ -3,11 +3,9 @@
 namespace App\Console\Commands;
 
 use App\Actions\Billing\ImportInvoices as ImportInvoicesAction;
-use App\Enums\Currency;
-use App\Models\Invoice;
+use App\Exceptions\ImportException;
 use App\Models\StudioSetting;
 use Illuminate\Console\Command;
-use RuntimeException;
 
 class ImportInvoices extends Command
 {
@@ -34,22 +32,23 @@ class ImportInvoices extends Command
     public function handle(): int
     {
         $dryRun = (bool) $this->option('dry-run');
+        $action = new ImportInvoicesAction(StudioSetting::current());
 
         try {
-            $result = (new ImportInvoicesAction(StudioSetting::current()))->handle(
+            $result = $action->handle(
                 invoicesPath: $this->argument('path'),
                 paymentsPath: $this->option('payments'),
                 dryRun: $dryRun,
             );
-        } catch (RuntimeException $e) {
+        } catch (ImportException $e) {
             $this->components->error($e->getMessage());
 
             return self::FAILURE;
         }
 
-        $invoices = $result['invoices'];
+        $summary = $action->summarise($result);
 
-        if ($invoices->isEmpty() && $result['skipped'] === []) {
+        if ($summary['imported'] === 0 && $summary['skipped'] === 0) {
             $this->components->warn('That export has no invoices in it.');
 
             return self::FAILURE;
@@ -57,46 +56,32 @@ class ImportInvoices extends Command
 
         $this->table(
             ['Client', 'Invoices', 'Total'],
-            $invoices
-                ->groupBy(fn (Invoice $invoice) => $invoice->team->name)
-                ->map(fn ($rows, $name) => [
-                    $name,
-                    $rows->count(),
-                    $rows->first()->money($rows->sum('amount'), 2),
-                ])
-                ->sortBy(0)
-                ->values(),
+            array_map(array_values(...), $summary['clients']),
         );
 
-        foreach ($result['totals'] as $code => $total) {
-            $this->line('  <fg=gray>'.$code.'</> '.Currency::from($code)->format($total, 2));
+        foreach ($summary['totals'] as $total) {
+            $this->line('  <fg=gray>'.$total['currency'].'</> '.$total['total']);
         }
 
         $this->newLine();
-        $this->components->twoColumnDetail('Invoices imported', (string) $invoices->count());
+        $this->components->twoColumnDetail('Invoices imported', (string) $summary['imported']);
 
-        if ($result['teams'] !== []) {
+        if ($summary['opened'] !== []) {
             $this->components->twoColumnDetail(
                 'Clients opened <fg=gray>(nobody emailed)</>',
-                (string) count($result['teams']),
+                (string) count($summary['opened']),
             );
-            $this->line('  <fg=gray>'.implode(', ', $result['teams']).'</>');
+            $this->line('  <fg=gray>'.implode(', ', $summary['opened']).'</>');
         }
 
-        if ($result['skipped'] !== []) {
-            $this->components->twoColumnDetail(
-                'Already here, left alone',
-                (string) count($result['skipped']),
-            );
+        if ($summary['skipped'] > 0) {
+            $this->components->twoColumnDetail('Already here, left alone', (string) $summary['skipped']);
         }
 
-        $this->components->twoColumnDetail('Payment dates filled in', (string) $result['dated']);
+        $this->components->twoColumnDetail('Payment dates filled in', (string) $summary['dated']);
 
-        if ($result['undated'] !== []) {
-            $this->components->twoColumnDetail(
-                'Paid, date unknown',
-                (string) count($result['undated']),
-            );
+        if ($summary['undated'] > 0) {
+            $this->components->twoColumnDetail('Paid, date unknown', (string) $summary['undated']);
             $this->line(
                 '  <fg=gray>Export the Payment report from Invoice Ninja and re-run with --payments '
                 .'to fill these in. Nothing else will be touched.</>'
@@ -111,7 +96,9 @@ class ImportInvoices extends Command
             return self::SUCCESS;
         }
 
-        $this->components->info('Imported '.$invoices->count().' '.str('invoice')->plural($invoices->count()).'.');
+        $this->components->info(
+            'Imported '.$summary['imported'].' '.str('invoice')->plural($summary['imported']).'.'
+        );
 
         return self::SUCCESS;
     }

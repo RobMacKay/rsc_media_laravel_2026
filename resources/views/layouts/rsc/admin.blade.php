@@ -4,6 +4,7 @@
         ['label' => 'proposals', 'route' => 'admin.proposals'],
         ['label' => 'jobs', 'route' => 'admin.jobs'],
         ['label' => 'invoices', 'route' => 'admin.invoices'],
+        ['label' => 'import', 'route' => 'admin.import'],
         ['label' => 'settings', 'route' => 'admin.settings'],
     ])->map(fn (array $link) => [
         'label' => $link['label'],
