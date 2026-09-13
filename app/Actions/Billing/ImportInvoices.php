@@ -177,7 +177,7 @@ class ImportInvoices
         $invoices = $result['invoices'];
 
         return [
-            'clients' => $invoices
+            'clients' => array_values($invoices
                 ->groupBy(fn (Invoice $invoice) => $invoice->team->name)
                 ->map(fn (Collection $rows, string $name) => [
                     'name' => $name,
@@ -185,16 +185,14 @@ class ImportInvoices
                     'total' => $rows->first()->money((float) $rows->sum('amount'), 2),
                 ])
                 ->sortBy('name')
-                ->values()
-                ->all(),
-            'totals' => collect($result['totals'])
+                ->all()),
+            'totals' => array_values(collect($result['totals'])
                 ->map(fn (float $total, string $code) => [
                     'currency' => $code,
                     'total' => Currency::from($code)->format($total, 2),
                 ])
                 ->sortKeys()
-                ->values()
-                ->all(),
+                ->all()),
             'imported' => $invoices->count(),
             'opened' => $result['teams'],
             'skipped' => count($result['skipped']),
@@ -450,7 +448,14 @@ class ImportInvoices
         }
 
         $handle = fopen($path, 'r');
-        $separator = $this->separator($path);
+
+        // is_readable() a moment ago is not a promise the open succeeds: the
+        // file can go, or the process can run out of handles, in between.
+        if ($handle === false) {
+            throw ImportException::unreadable($path, $field);
+        }
+
+        $separator = $this->separator($path, $field);
         $header = fgetcsv($handle, separator: $separator, escape: '');
 
         if ($header === false || $header === [null]) {
@@ -492,9 +497,14 @@ class ImportInvoices
      * machine's locale, and that parses as one enormous column rather than
      * failing outright.
      */
-    private function separator(string $path): string
+    private function separator(string $path, string $field = 'invoices'): string
     {
         $handle = fopen($path, 'r');
+
+        if ($handle === false) {
+            throw ImportException::unreadable($path, $field);
+        }
+
         $first = (string) fgets($handle);
         fclose($handle);
 
