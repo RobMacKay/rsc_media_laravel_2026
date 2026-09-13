@@ -31,6 +31,16 @@ function importScreen(?UploadedFile $payments = null): Testable
     return $payments === null ? $screen : $screen->set('payments', $payments);
 }
 
+test('the invoices screen links to the importer, since it is not in the nav', function () {
+    // A one-off migration does not hold a nav slot, so this link is the only
+    // way anyone finds it. If it goes, the screen is unreachable by accident.
+    $this->actingAs(User::factory()->admin()->create())
+        ->get(route('admin.invoices'))
+        ->assertOk()
+        ->assertSee('import history')
+        ->assertSee(route('admin.import'));
+});
+
 test('the import screen is closed to clients', function () {
     $this->actingAs(User::factory()->create())
         ->get(route('admin.import'))

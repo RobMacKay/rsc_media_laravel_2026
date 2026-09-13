@@ -788,6 +788,9 @@ class extends Component {
 
         <div class="flex flex-wrap gap-x-6 gap-y-2.5 px-[22px] py-4 font-mono text-[11px] text-muted">
             <span>{{ __(':shown of :total invoices', ['shown' => $this->invoices->count(), 'total' => $this->allInvoices->count()]) }}</span>
+            {{-- A one-off migration, so it is linked from where invoices live
+                 rather than holding a permanent slot in the admin nav. --}}
+            <a href="{{ route('admin.import') }}" wire:navigate class="text-muted underline-offset-4 hover:text-brand">{{ __('import history') }}</a>
             <span class="ms-auto">@php $shown = Money::total($this->invoices, fn (Invoice $invoice) => $invoice->total(), fn (Invoice $invoice) => $invoice->currency); @endphp
             {{ $this->settings->chargesVat() ? __(':total shown, inc VAT', ['total' => $shown]) : __(':total shown', ['total' => $shown]) }}</span>
         </div>

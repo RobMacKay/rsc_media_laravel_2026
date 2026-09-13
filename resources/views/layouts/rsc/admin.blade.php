@@ -6,7 +6,6 @@
         ['label' => 'jobs', 'route' => 'admin.jobs'],
         ['label' => 'invoices', 'route' => 'admin.invoices'],
         ['label' => 'health', 'route' => 'admin.health'],
-        ['label' => 'import', 'route' => 'admin.import'],
         ['label' => 'settings', 'route' => 'admin.settings'],
     ])->map(fn (array $link) => [
         'label' => $link['label'],
