@@ -96,6 +96,10 @@ The uploads are deleted as soon as the run finishes, either way. Note that Livew
 holding the original filename and size, so the screen deletes both — it tells the studio the
 files have been deleted and that has to be true.
 
+`App\Support\CsvReport` is where every Invoice Ninja export is read, and `App\Support\BusinessName::matches()` is the one answer to whether two spellings are the same client — both importers use them, so they cannot drift on what counts as a match and open a second record for a client already on the books.
+
+`App\Actions\Clients\ImportClients` fills `billing_email`, `address` and the company and VAT numbers from the Clients report, and **only where the field is blank**: the export is months old by the time it is used and must not put a stale address back over one the studio corrected. It deliberately opens no businesses of its own — the invoice import is the one place a client arrives from a file — and reports the names it could not match instead. Requiring `Client Name` alone is far too weak a check, since the invoice and payment reports both carry it, so it also insists on a contact email or street column.
+
 Whatever gets uploaded, it must not reach a row access and die on an undefined array key — the studio has a folder full of CSVs and `report.csv` is one keystroke from `report (1).csv`. So `read()` strips the byte order mark Excel leaves on the first column name and sniffs the separator (a re-saved export can come back semicolon or tab separated by locale), `requireInvoiceColumns()` checks the header up front and names both what is missing and what was actually found, and everything outside `ImportInvoices::Required` is read through `value()` so a narrower report still imports what it has. A file with `Payment Date` in the invoices slot is told it belongs in the other box, and vice versa. Dates go through `date()`, which reports the row number rather than throwing a parser error, and a row with no invoice number is skipped rather than guessed at.
 
 `App\Exceptions\ImportException` carries the `field()` it belongs against, so the screen can
@@ -207,3 +211,14 @@ The wording is overridden with `VerifyEmail::toMailUsing()` in `FortifyServicePr
 Studio-opened accounts never get a confirmation email: `pages::auth.set-password` stamps `email_verified_at` when they choose a password, because the studio typed the address and the person proved they read it. The backfill migration honours that by skipping anyone with `must_set_password`.
 
 **Nothing this app emails leaves the server without a queue worker.** Every notification is `ShouldQueue` and `QUEUE_CONNECTION=database`, so with no worker the jobs simply pile up in the `jobs` table with no error anywhere — that includes the confirmation link, ticket alerts, enquiry alerts, invoice chases and site-down warnings. The scheduler being on is not enough: `sites:check` and `invoices:chase` only queue the mail. Forge needs the worker and a real `MAIL_MAILER` as well as the scheduler.
+
+## Inviting a client is an invitation, not an opened account
+`App\Actions\Clients\InviteClient` is the one place the studio asks a client into the portal, for businesses that already exist — the ones imported from Invoice Ninja arrive with history and no people. `CreateClient` is the other case: a client being taken on, where the studio opens the account outright. Nothing is created by an invitation until the client accepts, so an unanswered one leaves no dormant account.
+
+Invitations carry `ClientAccess::Full`, because that is the only level that sees invoices and seeing their invoices is the point. They carry `TeamRole::Member` because `CreateNewUser::joinInvitedTeam` hardcodes Member and ignores `$invitation->role` — promising Owner here would be a lie the acceptance path does not keep. An invited client therefore cannot invite their own colleagues; the studio does it for them from the same panel. They last `InviteClient::VALID_FOR_DAYS` (14), longer than a colleague invite's 3, because a client was not expecting the email.
+
+Two traps fixed while building this, both of which had been live:
+- `pages::teams.pending-invitations-modal` created the membership with no `access`, so it fell to the column default of tickets-only and an invited client saw no invoices at all.
+- `CreateNewUser::pendingInvitation()` matched on the code alone, so a forwarded invite could be redeemed under any address. It now checks the email, which the modal path always had.
+
+The panel lives on `pages::admin.settings` and must stay **outside** `<form wire:submit="save">`, with `type="button"` on its controls. Inside the form every invite button also submitted the settings and its toast masked the real one.

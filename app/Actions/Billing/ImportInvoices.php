@@ -9,10 +9,11 @@ use App\Exceptions\ImportException;
 use App\Models\Invoice;
 use App\Models\StudioSetting;
 use App\Models\Team;
+use App\Support\BusinessName;
+use App\Support\CsvReport;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -34,6 +35,16 @@ class ImportInvoices
     /**
      * Invoice Ninja's status names, mapped onto ours.
      */
+    /**
+     * The columns the invoice export cannot be read without.
+     */
+    private const Required = [
+        'Invoice Invoice Number',
+        'Client Name',
+        'Invoice Date',
+        'Invoice Amount',
+    ];
+
     private const Statuses = [
         'Draft' => InvoiceStatus::Draft,
         'Sent' => InvoiceStatus::Sent,
@@ -48,6 +59,11 @@ class ImportInvoices
      * @var Collection<int, Team>
      */
     private Collection $teams;
+
+    /**
+     * The report being read, which owns the defensive column handling.
+     */
+    private CsvReport $report;
 
     public function __construct(private StudioSetting $settings) {}
 
@@ -71,8 +87,9 @@ class ImportInvoices
      */
     public function handle(string $invoicesPath, ?string $paymentsPath = null, bool $dryRun = false): array
     {
-        $rows = $this->read($invoicesPath);
-        $this->requireInvoiceColumns($rows);
+        $report = CsvReport::read($invoicesPath)->require('Invoice', self::Required);
+        $rows = $report->rows();
+        $this->report = $report;
         $this->teams = Team::withTrashed()->get();
         $paidDates = $paymentsPath === null ? [] : $this->paymentDates($paymentsPath);
 
@@ -209,8 +226,8 @@ class ImportInvoices
      */
     private function build(array $row, Team $team, string $number, array $paidDates, int $line): Invoice
     {
-        $status = self::Statuses[trim($this->value($row, 'Invoice Status'))] ?? InvoiceStatus::Sent;
-        $issued = $this->date($this->value($row, 'Invoice Date'), $line, 'Invoice Date');
+        $status = self::Statuses[trim($this->report->value($row, 'Invoice Status'))] ?? InvoiceStatus::Sent;
+        $issued = $this->date($this->report->value($row, 'Invoice Date'), $line, 'Invoice Date');
 
         $invoice = new Invoice([
             'number' => $number,
@@ -220,11 +237,11 @@ class ImportInvoices
             // RaisePlanInvoices would read them as this month's plan invoice
             // already being raised.
             'type' => InvoiceType::AdHoc,
-            'note' => $this->note($this->value($row, 'Invoice Public Notes')),
-            'amount' => $this->money($this->value($row, 'Invoice Amount')),
-            'paid_to_date' => $this->money($this->value($row, 'Invoice Paid to Date')),
-            'discount' => $this->money($this->value($row, 'Invoice Discount')),
-            'po_number' => $this->text($this->value($row, 'Invoice PO Number')),
+            'note' => $this->note($this->report->value($row, 'Invoice Public Notes')),
+            'amount' => $this->money($this->report->value($row, 'Invoice Amount')),
+            'paid_to_date' => $this->money($this->report->value($row, 'Invoice Paid to Date')),
+            'discount' => $this->money($this->report->value($row, 'Invoice Discount')),
+            'po_number' => $this->text($this->report->value($row, 'Invoice PO Number')),
             // Whatever the client and the accountant already have on file.
             'external_reference' => trim($row['Invoice Invoice Number']),
             // No row in the export carries any tax: the studio is not
@@ -300,9 +317,9 @@ class ImportInvoices
     private function team(array $row, array &$created): Team
     {
         $name = trim($row['Client Name']);
-        $currency = Currency::tryFrom(trim($this->value($row, 'Client Currency'))) ?? Currency::Base;
+        $currency = Currency::tryFrom(trim($this->report->value($row, 'Client Currency'))) ?? Currency::Base;
 
-        $team = $this->teams->first(fn (Team $team) => $this->matches($team->name, $name));
+        $team = $this->teams->first(fn (Team $team) => BusinessName::matches($team->name, $name));
 
         if ($team !== null) {
             return $team;
@@ -317,24 +334,6 @@ class ImportInvoices
     }
 
     /**
-     * Determine whether two client names are the same business.
-     *
-     * Loose enough to match "Mearns and Gill" to "Mearns & Gill" so an import
-     * does not open a second record for a client already on the books.
-     */
-    private function matches(string $one, string $other): bool
-    {
-        $normalise = fn (string $name) => Str::of($name)
-            ->lower()
-            ->replace('&', 'and')
-            ->replaceMatches('/[^a-z0-9]+/', ' ')
-            ->squish()
-            ->toString();
-
-        return $normalise($one) === $normalise($other);
-    }
-
-    /**
      * Get the date an invoice fell due.
      *
      * 57 rows have no due date at all, so they fall back to the client's
@@ -344,7 +343,7 @@ class ImportInvoices
      */
     private function dueDate(array $row, Team $team, Carbon $issued, int $line): Carbon
     {
-        $due = $this->text($this->value($row, 'Invoice Due Date'));
+        $due = $this->text($this->report->value($row, 'Invoice Due Date'));
 
         return $due === null
             ? $issued->copy()->addDays($team->effectivePaymentTerms($this->settings))
@@ -365,18 +364,18 @@ class ImportInvoices
      */
     private function paymentDates(string $path): array
     {
-        $rows = $this->read($path, 'payments');
+        $report = CsvReport::read($path, 'payments');
+        $rows = $report->rows();
 
         if ($rows === []) {
             return [];
         }
 
-        $columns = array_keys($rows[0]);
-        $dateColumn = $this->column($columns, ['payment date', 'date paid', 'paid on', 'transaction date']);
-        $numberColumn = $this->column($columns, ['invoice invoice number', 'invoice number', 'number']);
+        $dateColumn = $report->column(['payment date', 'date paid', 'paid on', 'transaction date']);
+        $numberColumn = $report->column(['invoice invoice number', 'invoice number', 'number']);
 
         if ($dateColumn === null || $numberColumn === null) {
-            throw ImportException::noPaymentDates($columns);
+            throw ImportException::noPaymentDates($report->columns());
         }
 
         $dates = [];
@@ -401,159 +400,6 @@ class ImportInvoices
         }
 
         return $dates;
-    }
-
-    /**
-     * Find the column with exactly one of the given names, case aside.
-     *
-     * Matched whole rather than loosely: "Invoice Paid to Date" is an amount
-     * and "Invoice Date" is when the invoice was raised, and either one
-     * pattern-matched into a payment date would silently misdate the books.
-     *
-     * @param  list<string>  $columns
-     * @param  list<string>  $candidates
-     */
-    private function column(array $columns, array $candidates): ?string
-    {
-        foreach ($candidates as $candidate) {
-            foreach ($columns as $column) {
-                if (Str::of($column)->lower()->squish()->toString() === $candidate) {
-                    return $column;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * The columns the invoice export cannot be read without.
-     */
-    private const Required = [
-        'Invoice Invoice Number',
-        'Client Name',
-        'Invoice Date',
-        'Invoice Amount',
-    ];
-
-    /**
-     * Read a CSV into rows keyed by column name.
-     *
-     * @return list<array<string, string>>
-     */
-    private function read(string $path, string $field = 'invoices'): array
-    {
-        if (! is_readable($path)) {
-            throw ImportException::unreadable($path, $field);
-        }
-
-        $handle = fopen($path, 'r');
-
-        // is_readable() a moment ago is not a promise the open succeeds: the
-        // file can go, or the process can run out of handles, in between.
-        if ($handle === false) {
-            throw ImportException::unreadable($path, $field);
-        }
-
-        $separator = $this->separator($path, $field);
-        $header = fgetcsv($handle, separator: $separator, escape: '');
-
-        if ($header === false || $header === [null]) {
-            fclose($handle);
-
-            throw ImportException::empty($field);
-        }
-
-        // A spreadsheet that has been through Excel starts with a byte order
-        // mark, which would otherwise make the first column name unmatchable
-        // while looking identical in any error message.
-        $header = array_map(
-            fn ($name) => trim(preg_replace('/^\xEF\xBB\xBF/', '', (string) $name) ?? ''),
-            $header,
-        );
-
-        $rows = [];
-
-        while (($line = fgetcsv($handle, separator: $separator, escape: '')) !== false) {
-            // The export ends with a blank line, and a short row would
-            // silently shift every value along by one.
-            if ($line === [null] || count(array_filter($line, fn ($value) => (string) $value !== '')) === 0) {
-                continue;
-            }
-
-            $rows[] = array_combine($header, array_pad(array_slice($line, 0, count($header)), count($header), ''));
-        }
-
-        fclose($handle);
-
-        return $rows;
-    }
-
-    /**
-     * Work out which character separates the columns.
-     *
-     * Invoice Ninja writes commas, but a file that has been opened and saved
-     * again in Excel can come back semicolon or tab separated depending on the
-     * machine's locale, and that parses as one enormous column rather than
-     * failing outright.
-     */
-    private function separator(string $path, string $field = 'invoices'): string
-    {
-        $handle = fopen($path, 'r');
-
-        if ($handle === false) {
-            throw ImportException::unreadable($path, $field);
-        }
-
-        $first = (string) fgets($handle);
-        fclose($handle);
-
-        $counts = [
-            ',' => substr_count($first, ','),
-            ';' => substr_count($first, ';'),
-            "\t" => substr_count($first, "\t"),
-        ];
-
-        arsort($counts);
-
-        return $counts[','] > 0 ? ',' : (string) array_key_first($counts);
-    }
-
-    /**
-     * Refuse a file that is not the report we were asked for.
-     *
-     * Checked up front against the header rather than discovered on the first
-     * row, so uploading the wrong one of Invoice Ninja's reports says which
-     * report it wanted instead of failing on an undefined array key.
-     *
-     * @param  list<array<string, string>>  $rows
-     */
-    private function requireInvoiceColumns(array $rows): void
-    {
-        if ($rows === []) {
-            return;
-        }
-
-        $columns = array_keys($rows[0]);
-        $missing = array_values(array_diff(self::Required, $columns));
-
-        if ($missing !== []) {
-            throw ImportException::wrongReport($missing, $columns);
-        }
-    }
-
-    /**
-     * Read a column that a given export may not carry at all.
-     *
-     * Only the four columns in self::Required are insisted on; everything else
-     * is read through here, so a narrower report still imports what it does
-     * have rather than falling over on a column nobody needed.
-     *
-     * @param  array<string, string>  $row
-     */
-    private function value(array $row, string $column): string
-    {
-        return (string) ($row[$column] ?? '');
     }
 
     /**

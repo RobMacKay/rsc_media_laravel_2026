@@ -11,6 +11,7 @@ use App\Models\TeamInvitation;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
 
@@ -79,6 +80,17 @@ class CreateNewUser implements CreatesNewUsers
         if (! $invitation || ! $invitation->isPending()) {
             throw ValidationException::withMessages([
                 'invitation' => __('That invite code has expired or has already been used.'),
+            ]);
+        }
+
+        // An invitation is for the address it was sent to. Matching on the code
+        // alone would let a forwarded invite be redeemed by anyone under any
+        // address, and what sits behind it is a client's whole invoice history.
+        // The other acceptance path, pages::teams.pending-invitations-modal,
+        // has always checked this; registration did not.
+        if (Str::lower($invitation->email) !== Str::lower((string) ($input['email'] ?? ''))) {
+            throw ValidationException::withMessages([
+                'invitation' => __('That invite was sent to a different email address.'),
             ]);
         }
 

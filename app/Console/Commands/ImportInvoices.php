@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Actions\Billing\ImportInvoices as ImportInvoicesAction;
+use App\Actions\Clients\ImportClients;
 use App\Exceptions\ImportException;
 use App\Models\StudioSetting;
 use Illuminate\Console\Command;
@@ -17,6 +18,7 @@ class ImportInvoices extends Command
     protected $signature = 'invoices:import
         {path : The Invoice Ninja invoice export, as CSV}
         {--payments= : The separate payments export, to fill in when each invoice was settled}
+        {--clients= : The separate clients export, to fill in contact details}
         {--dry-run : Work out what would be imported and print it, without writing anything}';
 
     /**
@@ -47,6 +49,25 @@ class ImportInvoices extends Command
         }
 
         $summary = $action->summarise($result);
+
+        if ($this->option('clients')) {
+            try {
+                $contacts = (new ImportClients)->handle($this->option('clients'), $dryRun);
+            } catch (ImportException $e) {
+                $this->components->error($e->getMessage());
+
+                return self::FAILURE;
+            }
+
+            $this->components->twoColumnDetail(
+                'Contact details filled in',
+                (string) count($contacts['filled']),
+            );
+
+            if ($contacts['unmatched'] !== []) {
+                $this->line('  <fg=gray>Not on the books: '.implode(', ', $contacts['unmatched']).'</>');
+            }
+        }
 
         if ($summary['imported'] === 0 && $summary['skipped'] === 0) {
             $this->components->warn('That export has no invoices in it.');

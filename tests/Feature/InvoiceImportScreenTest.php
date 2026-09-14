@@ -162,6 +162,38 @@ test('a spreadsheet saved with semicolons still previews', function () {
         ->assertSee('6 invoices to import');
 });
 
+test('the clients export fills contact details on the same run', function () {
+    importScreen()
+        ->set('clients', uploadedExport('invoice-ninja-clients.csv', 'clients.csv'))
+        ->call('preview')
+        ->call('confirm')
+        ->assertHasNoErrors();
+
+    // The business is opened by the invoice import in the same run, so the
+    // contact details have to go on after it exists.
+    expect(Team::query()->where('name', 'Kintail Joinery & Sons')->value('billing_email'))
+        ->toBe('accounts@kintail.test');
+});
+
+test('a preview of the clients export writes no contact details', function () {
+    importScreen()
+        ->set('clients', uploadedExport('invoice-ninja-clients.csv', 'clients.csv'))
+        ->call('preview')
+        ->assertSee('contact details');
+
+    $this->assertDatabaseCount('teams', 1); // the admin's own personal team
+});
+
+test('the wrong report in the clients box is refused against that field', function () {
+    importScreen()
+        ->set('clients', uploadedExport('invoice-ninja-payments.csv', 'payments.csv'))
+        ->call('preview')
+        ->assertHasErrors('clients')
+        ->assertSee('does not look like the Clients report');
+
+    $this->assertDatabaseCount('invoices', 0);
+});
+
 test('the invoice report uploaded as the payments report is refused against that field', function () {
     importScreen(uploadedExport('invoice-ninja-invoices.csv', 'wrong.csv'))
         ->call('preview')

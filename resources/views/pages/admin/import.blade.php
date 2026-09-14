@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Billing\ImportInvoices;
+use App\Actions\Clients\ImportClients;
 use App\Exceptions\ImportException;
 use App\Models\Attachment;
 use App\Models\StudioSetting;
@@ -27,6 +28,13 @@ class extends Component {
      * because it is a different report and may well arrive later than the invoices did.
      */
     public ?TemporaryUploadedFile $payments = null;
+
+    /**
+     * The Clients export, which is the only one carrying contact details. Without
+     * it an imported client has no address to invite them at and no address on a
+     * re-issued invoice.
+     */
+    public ?TemporaryUploadedFile $clients = null;
 
     /**
      * What a dry run said would happen, held between the preview and the confirmation.
@@ -83,8 +91,9 @@ class extends Component {
     {
         $this->forget($this->invoices);
         $this->forget($this->payments);
+        $this->forget($this->clients);
 
-        $this->reset(['invoices', 'payments']);
+        $this->reset(['invoices', 'payments', 'clients']);
     }
 
     /**
@@ -145,15 +154,19 @@ class extends Component {
             [
                 'invoices' => $rules,
                 'payments' => Attachment::rules(['csv', 'txt'], $this->maxKb(), required: false),
+                'clients' => Attachment::rules(['csv', 'txt'], $this->maxKb(), required: false),
             ],
             [
                 ...Attachment::messages('invoices', ['csv', 'txt'], $this->maxKb()),
                 ...Attachment::messages('payments', ['csv', 'txt'], $this->maxKb()),
+                ...Attachment::messages('clients', ['csv', 'txt'], $this->maxKb()),
                 'invoices.required' => __('Choose the invoice export to import.'),
             ],
         );
 
         $action = new ImportInvoices($this->settings());
+
+        $contacts = null;
 
         try {
             $result = $action->handle(
@@ -161,6 +174,13 @@ class extends Component {
                 paymentsPath: $this->payments?->getRealPath(),
                 dryRun: $dryRun,
             );
+
+            // Contact details go on after the businesses exist, so a client
+            // opened by this very run still gets its address. Inside the same
+            // try, or a wrong file here escapes as a 500.
+            if ($this->clients !== null) {
+                $contacts = (new ImportClients)->handle($this->clients->getRealPath(), $dryRun);
+            }
         } catch (ImportException $e) {
             // Put the complaint under the upload it is about, rather than failing with
             // no clue which of the two files was the problem.
@@ -174,6 +194,11 @@ class extends Component {
         }
 
         $summary = $action->summarise($result);
+
+        if ($contacts !== null) {
+            $summary['contacts'] = count($contacts['filled']);
+            $summary['unmatched'] = $contacts['unmatched'];
+        }
 
         if ($summary['imported'] === 0 && $summary['skipped'] === 0) {
             $this->addError('invoices', __('That export has no invoices in it.'));
@@ -229,6 +254,12 @@ class extends Component {
                                 :hint="$invoices
                                     ? $invoices->getClientOriginalName()
                                     : __('The Invoice report from Invoice Ninja, as CSV. Up to :size.', ['size' => \Illuminate\Support\Number::fileSize($this->maxKb() * 1024)])" />
+
+                <x-rsc.dropzone name="clients" model="clients"
+                                :title="__('Clients export (optional)')"
+                                :hint="$clients
+                                    ? $clients->getClientOriginalName()
+                                    : __('The Clients report — contact addresses, which is what lets you invite a client into the portal afterwards.')" />
 
                 <x-rsc.dropzone name="payments" model="payments"
                                 :title="__('Payments export (optional)')"
@@ -317,6 +348,17 @@ class extends Component {
                         </dd>
                     @endif
                 </div>
+                @isset($previewed['contacts'])
+                    <div>
+                        <dt class="font-mono text-[11px] tracking-[0.08em] text-muted">{{ __('contact details') }}</dt>
+                        <dd class="mt-1 mb-0 text-sm">{{ $previewed['contacts'] }}</dd>
+                        @if (($previewed['unmatched'] ?? []) !== [])
+                            <dd class="mt-1 mb-0 text-xs text-muted">
+                                {{ __('not on the books: :names', ['names' => implode(', ', $previewed['unmatched'])]) }}
+                            </dd>
+                        @endif
+                    </div>
+                @endisset
             </dl>
 
             <div class="mt-6 flex flex-wrap items-center gap-3">

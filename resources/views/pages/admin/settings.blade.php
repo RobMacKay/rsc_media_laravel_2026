@@ -1,6 +1,8 @@
 <?php
 
 use App\Actions\Clients\CreateClient;
+use App\Actions\Clients\InviteClient;
+use App\Rules\UniqueTeamInvitation;
 use App\Enums\Currency;
 use App\Models\Plan;
 use App\Models\User;
@@ -71,6 +73,128 @@ class extends Component {
             ->all();
 
         $this->selectClient($this->clients->first()?->id);
+
+        // Pre-filled so the field shows what is on file and validation has
+        // something to check: wire:model owns the input's value, so an address
+        // only living in the computed list would render as an empty box.
+        $this->inviteEmails = $this->clientsWithoutAccess
+            ->mapWithKeys(fn (Team $team) => [$team->id => (string) $team->billing_email])
+            ->all();
+    }
+
+
+    /**
+     * Which clients are ticked to be invited, keyed by team id.
+     *
+     * @var array<int, bool>
+     */
+    public array $inviting = [];
+
+    /**
+     * The address each invitation goes to, keyed by team id. Pre-filled from
+     * the client's billing address and editable, because the one on file came
+     * out of an export and may be a year old.
+     *
+     * @var array<int, string>
+     */
+    public array $inviteEmails = [];
+
+    /** Set once the studio has seen who is about to be emailed. */
+    public bool $confirmingInvites = false;
+
+    /**
+     * Get the clients who have nobody in the portal yet.
+     *
+     * @return Collection<int, Team>
+     */
+    #[Computed]
+    public function clientsWithoutAccess(): Collection
+    {
+        return Team::query()
+            ->where('is_personal', false)
+            ->whereDoesntHave('members')
+            ->orderBy('name')
+            ->get();
+    }
+
+    /**
+     * Get the clients ticked, with the address each would be sent to.
+     *
+     * @return \Illuminate\Support\Collection<int, array{team: Team, email: string}>
+     */
+    #[Computed]
+    public function pendingInvites(): \Illuminate\Support\Collection
+    {
+        return $this->clientsWithoutAccess
+            ->filter(fn (Team $team) => ($this->inviting[$team->id] ?? false))
+            ->map(fn (Team $team) => [
+                'team' => $team,
+                'email' => trim($this->inviteEmails[$team->id] ?? ''),
+            ])
+            ->filter(fn (array $row) => $row['email'] !== '')
+            ->values();
+    }
+
+    /**
+     * Show who is about to be emailed, before anything goes out.
+     */
+    public function reviewInvites(): void
+    {
+        if ($this->pendingInvites->isEmpty()) {
+            Flux::toast(variant: 'warning', text: __('Tick a client with an email address first.'));
+
+            return;
+        }
+
+        $this->confirmingInvites = true;
+    }
+
+    /**
+     * Back out without sending.
+     */
+    public function cancelInvites(): void
+    {
+        $this->confirmingInvites = false;
+    }
+
+    /**
+     * Send the invitations the studio has just confirmed.
+     */
+    public function sendInvites(): void
+    {
+        $rows = $this->pendingInvites;
+
+        $this->validate(
+            $rows->mapWithKeys(fn (array $row) => [
+                'inviteEmails.'.$row['team']['id'] => [
+                    'required', 'string', 'email', 'max:255',
+                    new UniqueTeamInvitation($row['team']),
+                ],
+            ])->all(),
+            [],
+            $rows->mapWithKeys(fn (array $row) => [
+                'inviteEmails.'.$row['team']['id'] => $row['team']['name'],
+            ])->all(),
+        );
+
+        $inviter = Auth::user();
+
+        foreach ($rows as $row) {
+            app(InviteClient::class)->handle(
+                team: $row['team'],
+                email: $row['email'],
+                invitedBy: $inviter,
+            );
+        }
+
+        $this->reset('inviting', 'inviteEmails', 'confirmingInvites');
+        unset($this->clientsWithoutAccess, $this->pendingInvites);
+
+        Flux::toast(variant: 'success', text: trans_choice(
+            '{1}Invitation sent.|[2,*]:count invitations sent.',
+            $rows->count(),
+            ['count' => $rows->count()],
+        ));
     }
 
     /**
@@ -351,6 +475,80 @@ class extends Component {
         </p>
     </div>
 
+    {{-- Clients brought over from Invoice Ninja arrive as businesses with
+         nobody in them. This is where they are asked in. --}}
+    @if ($this->clientsWithoutAccess->isNotEmpty())
+        <x-rsc.panel>
+            <div class="mb-[18px] flex flex-wrap items-center gap-3">
+                <span class="font-mono text-[11px] tracking-[0.08em] text-muted">client_portal_access</span>
+                <span class="ms-auto text-[13px] text-muted">
+                    {{ trans_choice(
+                        '{1}1 client has nobody in the portal yet.|[2,*]:count clients have nobody in the portal yet.',
+                        $this->clientsWithoutAccess->count(),
+                        ['count' => $this->clientsWithoutAccess->count()],
+                    ) }}
+                </span>
+            </div>
+
+            @if ($confirmingInvites)
+                <div class="rounded-[14px] border border-dashed border-warm p-[clamp(18px,2vw,24px)]">
+                    <x-rsc.kicker tone="warm" class="mb-3">about_to_email</x-rsc.kicker>
+
+                    <ul class="mb-5 flex list-none flex-col gap-2 p-0">
+                        @foreach ($this->pendingInvites as $row)
+                            <li class="flex flex-wrap items-baseline gap-x-3 text-sm">
+                                <span class="font-display font-bold">{{ $row['team']->name }}</span>
+                                <span class="font-mono text-[11px] text-muted">{{ $row['email'] }}</span>
+                            </li>
+                        @endforeach
+                    </ul>
+
+                    <p class="mb-5 text-[13px] text-muted">
+                        {{ __('They can see their invoices, projects and tickets once they accept. The link is good for :days days.', ['days' => \App\Actions\Clients\InviteClient::VALID_FOR_DAYS]) }}
+                    </p>
+
+                    <div class="flex flex-wrap items-center gap-3.5">
+                        <x-rsc.button type="button" wire:click="sendInvites" wire:loading.attr="disabled" wire:target="sendInvites" class="!px-[22px] !py-3 !text-sm">
+                            <span wire:loading.remove wire:target="sendInvites">
+                                {{ trans_choice('{1}Send it|[2,*]Send all :count', $this->pendingInvites->count(), ['count' => $this->pendingInvites->count()]) }}
+                            </span>
+                            <span wire:loading wire:target="sendInvites">{{ __('Sending…') }}</span>
+                        </x-rsc.button>
+                        <x-rsc.button type="button" wire:click="cancelInvites" variant="outline" class="!px-[22px] !py-3 !text-sm">{{ __('Back') }}</x-rsc.button>
+                    </div>
+                </div>
+            @else
+                <div class="flex flex-col gap-2.5">
+                    @foreach ($this->clientsWithoutAccess as $team)
+                        <label class="flex flex-wrap items-center gap-3.5 rounded-[14px] border border-line px-[18px] py-3.5"
+                               wire:key="invite-{{ $team->id }}">
+                            <input type="checkbox" wire:model.live="inviting.{{ $team->id }}"
+                                   class="size-4" style="accent-color: var(--rsc-accent)">
+
+                            <span class="min-w-[180px] flex-1 font-display text-sm font-bold">{{ $team->name }}</span>
+
+                            <span class="min-w-[240px] flex-1">
+                                <x-rsc.input type="email" wire:model="inviteEmails.{{ $team->id }}"
+                                             placeholder="{{ __('no address on file') }}"
+                                             class="!py-2.5 !text-[13px]" />
+                            </span>
+                        </label>
+
+                        @error('inviteEmails.'.$team->id)
+                            <p class="mt-0 mb-1 ps-[18px] text-xs text-warm">{{ $message }}</p>
+                        @enderror
+                    @endforeach
+                </div>
+
+                <div class="mt-5 flex flex-wrap items-center gap-3.5">
+                    <x-rsc.button type="button" wire:click="reviewInvites" class="!px-[22px] !py-3 !text-sm">{{ __('Review and send') }}</x-rsc.button>
+                    <span class="text-[13px] text-muted">{{ __('Nothing is sent until you have seen the list.') }}</span>
+                </div>
+            @endif
+        </x-rsc.panel>
+    @endif
+
+
     <form wire:submit="save" class="flex flex-col gap-[clamp(12px,1.4vw,18px)]">
         <x-rsc.panel>
             <div class="mb-5 flex flex-wrap items-center gap-3 font-mono text-[11px] tracking-[0.08em] text-muted">
@@ -546,6 +744,7 @@ class extends Component {
                 @endforeach
             </div>
         </x-rsc.panel>
+
 
         <x-rsc.panel>
             <div class="mb-[18px] flex flex-wrap items-center gap-3">

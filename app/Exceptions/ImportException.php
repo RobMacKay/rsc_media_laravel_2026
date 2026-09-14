@@ -53,16 +53,16 @@ class ImportException extends RuntimeException
      * @param  list<string>  $missing
      * @param  list<string>  $columns
      */
-    public static function wrongReport(array $missing, array $columns, string $field = 'invoices'): self
+    public static function wrongReport(string $report, array $missing, array $columns, string $field = 'invoices'): self
     {
-        $looksLikePayments = in_array('Payment Date', $columns, true);
+        $looksLikePayments = $report !== 'Payment' && in_array('Payment Date', $columns, true);
 
         return new self(
-            'That does not look like the Invoice report. It is missing '
+            "That does not look like the {$report} report. It is missing "
             .self::list($missing).'. '
             .($looksLikePayments
                 ? 'It looks like the Payment report — that one goes in the payments box below.'
-                : 'In Invoice Ninja the report type has to be "Invoice".')
+                : "In Invoice Ninja the report type has to be \"{$report}\".")
             .' Columns found: '.implode(', ', $columns).'.',
             $field,
         );
