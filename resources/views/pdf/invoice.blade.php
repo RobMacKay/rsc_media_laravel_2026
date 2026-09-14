@@ -118,8 +118,8 @@
                 @if ($invoice->team->billing_email)
                     <div class="muted">{{ $invoice->team->billing_email }}</div>
                 @endif
-                @if ($invoice->team->purchase_order_ref)
-                    <div class="muted" style="padding-top: 5px">PO {{ $invoice->team->purchase_order_ref }}</div>
+                @if ($invoice->purchaseOrderRef())
+                    <div class="muted" style="padding-top: 5px">PO {{ $invoice->purchaseOrderRef() }}</div>
                 @endif
             </td>
             <td style="width: 29%">

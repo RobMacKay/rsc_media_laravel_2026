@@ -49,6 +49,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('jobs', 'pages::admin.jobs')->name('jobs');
         Route::livewire('invoices', 'pages::admin.invoices')->name('invoices');
         Route::livewire('health', 'pages::admin.health')->name('health');
+        Route::livewire('import', 'pages::admin.import')->name('import');
         Route::livewire('settings', 'pages::admin.settings')->name('settings');
     });
 });

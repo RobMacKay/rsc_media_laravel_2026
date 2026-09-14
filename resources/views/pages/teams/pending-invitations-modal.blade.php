@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ClientAccess;
 use App\Models\TeamInvitation;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
@@ -54,7 +55,13 @@ new class extends Component {
 
             $team->memberships()->firstOrCreate(
                 ['user_id' => $user->id],
-                ['role' => $invitation->role]
+                [
+                    'role' => $invitation->role,
+                    // Without this the membership takes the column default of
+                    // tickets-only, so a client invited to see their invoices
+                    // would join and find none — the one thing the invite is for.
+                    'access' => $invitation->access ?? ClientAccess::Tickets,
+                ]
             );
 
             $invitation->update(['accepted_at' => now()]);

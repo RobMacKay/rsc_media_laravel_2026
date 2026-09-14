@@ -20,6 +20,12 @@ class InvoiceDownloadController extends Controller
     {
         abort_unless($invoice->team_id === $request->user()->current_team_id, 404);
 
+        // A record is somebody else's document — an agency's remittance advice
+        // filed for the studio's own books. Rendering it through this template
+        // would dress it up as an invoice RSC Media issued, which it is not.
+        // The remittance itself is served as an attachment instead.
+        abort_if($invoice->record_only, 404);
+
         $settings = StudioSetting::current();
 
         return Pdf::loadView('pdf.invoice', [

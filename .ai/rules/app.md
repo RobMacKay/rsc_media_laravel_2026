@@ -25,6 +25,89 @@ Every invoice is created through `App\Actions\Billing\RaiseInvoice`, so the numb
 
 A ticket is billable when it is `Chargeable`, the client approved the quote, and no invoice references it — `Ticket::isReadyToInvoice()`. `invoices.ticket_id` is what stops it being billed twice.
 
+## Invoice amounts are decimal; only invoices are
+`invoices.amount`, `paid_to_date` and `discount` are `decimal(10,2)` cast to float, because the history imported from Invoice Ninja has pence on it (£540.10, £1,333.80) and rounding a client's paid invoice is not an option.
+
+Everything else stays whole units on purpose — `Plan::price`, `Team::hour_rate`/`day_rate`, `Project::agreed_value`, `Ticket::quoted_rate`. Nothing the studio raises itself has pence, and `Project::contractInvoiced()` still casts its sum to `int` so a fixed contract price stays in round pounds.
+
+Because `amount` is a float, `expect($invoice->amount)->toBe(1000)` fails and `toBe(1000.0)` passes. That caught four existing tests when the column changed.
+
+Use `$invoice->moneyLabel($amount)` in a list: it shows pence only when there are any, so a column of the studio's round numbers does not read as "£550.00" while an imported £540.10 still tells the truth. The invoice document and the client's invoice page always use two decimals, as a document should.
+
+`discount` holds what was given away rather than being folded into the amount: `amount` is what was charged, `subtotal()` is `amount + discount`. A charity paying £6 of a £25 hosting bill has to show as exactly that a year later.
+
+## Each number prefix has its own sequence
+`Invoice::nextNumber($prefix)` matches on `like '<prefix>-%'`, so the three kinds cannot move each other along:
+
+- `RSC-` (`Invoice::Prefix`) — the studio's own invoices.
+- `REC-` (`Invoice::RecordPrefix`) — records of work somebody else billed.
+- `IN-` (`Invoice::ImportPrefix`) — history from Invoice Ninja, with the old number kept in `external_reference` so the client and the accountant can still find it.
+
+Before this the match was a string `max('number')` across the whole table, which allocated nonsense the moment a non-RSC number existed.
+
+`po_number` is the client's reference for that job, and `purchaseOrderRef()` prefers it over the client's standing `teams.purchase_order_ref`. An agency putting work through job by job raises a fresh PO each time, which one standing ref per client cannot hold.
+
+## A record is somebody else's invoice, and nothing may act on it
+`invoices.record_only` marks work an agency self-bills and pays against a remittance advice. `RaiseInvoice::record()` is the only way one is made: settled on creation, `vat_rate` 0 whatever the studio's own VAT position is, and `external_reference` holding the agency's reference.
+
+A boolean rather than an `InvoiceType` case, because it is orthogonal to deposit/final/plan/ad-hoc and `InvoiceType` is already load-bearing in `Project::contractInvoiced()` and `RaisePlanInvoices::due()`.
+
+Every guard that follows exists because a record must never be treated as money the studio is owed or as a document it issued:
+
+- `isOverdue()`, `reminderDue()` and `remindersExhausted()` all return early on it, so `invoices:chase` never touches it even if it is months past its date and still unpaid.
+- The `outstanding()` and `overdue()` scopes exclude it, which keeps it out of the admin money tiles and the client's dashboard.
+- The `issued()` scope is what the client portal lists, and `pages::client.invoice` 404s on one. The client on a record never received an invoice from RSC Media, so showing them one would be inventing a document.
+- `InvoiceDownloadController` 404s on one, because `pdf.invoice` would dress the agency's remittance up in the studio's letterhead.
+
+`Invoice` implements `HasAttachments`, so the remittance PDF hangs off the record itself through the usual `StoreAttachment`. File it with `shared_with_client: false` — it is the studio's record, not the client's.
+
+## Standing arrangements are not plans
+`RecurringInvoice` is a private monthly arrangement with one client: discounted hosting for a charity, a small hosting fee, the agency contract. Deliberately separate from `Plan`, which is a product the studio sells with a price and a billing strip in the portal.
+
+`RaiseRecurringInvoices` mirrors `RaisePlanInvoices` — `due()` / `handle()` / `raiseFor()` — so the button and the scheduler cannot double up. Two things differ:
+
+- It runs **daily**, not `monthlyOn(1)`, because each arrangement bills on its own `day_of_month` (the real ones are the 1st, the 6th and the 17th). `billingDateIn()` clamps the 31st to the last day of a short month rather than skipping it.
+- Idempotency is `invoices.recurring_invoice_id`, not the date — the same job `invoices.ticket_id` does for a chargeable ticket. Once a schedule has an invoice in a month it is done for that month however often the command runs.
+
+A `record_only` schedule raises a paid record through `RaiseInvoice::record()` instead of an invoice to send.
+
+There is no admin screen for these yet; they are created directly.
+
+## Importing history is the one exception to RaiseInvoice
+`App\Actions\Billing\ImportInvoices` writes invoices without going through `RaiseInvoice`, and that is deliberate. `RaiseInvoice` exists to make *new* invoices consistent: it stamps the next number, today's date and the studio's current VAT rate. An import has to keep the number, dates and status actually issued years ago, so routing it through `RaiseInvoice` would mean an override for every one of those and would hollow out the guarantee it is there to give. Do not "fix" this by merging them.
+
+Two traps the import already handles, both of which silently corrupt the books if reintroduced:
+
+- **It must not use `CreateClient`.** That makes a User and emails a set-your-password link, and several of these contacts last heard from the studio in 2022. Clients come in as the business only; the live ones get invited by hand afterwards.
+- **The payments export is a different report.** Invoice Ninja's *Invoice* report filtered to Paid has identical columns and no payment date at all — "Paid to Date" is an amount, not a date. The column match is on the whole name against an allowlist for exactly this reason: a loose pattern matched `Invoice Date` and would have written issue dates in as the day the money arrived. There is no fallback; `paid_at` stays null when the date is not known. A part-paid invoice is never dated either, or the part payment reads as the whole thing being settled.
+
+Anything imported still outstanding arrives with `reminders_paused_at` set. The history is brought over for the record, not to restart collections — without this, inviting an imported client to the portal or setting a billing email on them fires a final notice for an invoice from 2025 that was probably settled outside this system. Unmute the individual ones the studio does still want chased.
+
+The studio uploads the exports at `/admin/import` (`pages::admin.import`) rather than
+passing a path, so the real export never has to sit anywhere it might get committed. Upload,
+preview, confirm: the preview is the action's own `dryRun`, so it runs the whole import in a
+rolled-back transaction and prints the per-currency totals to reconcile before a row is
+written. The CLI command stays for use on a server, and both render from
+`ImportInvoices::summarise()` so the figure on screen and the figure in the terminal cannot
+drift.
+
+The uploads are deleted as soon as the run finishes, either way. Note that Livewire's
+`TemporaryUploadedFile::delete()` removes only the file and leaves a `<name>.json` sidecar
+holding the original filename and size, so the screen deletes both — it tells the studio the
+files have been deleted and that has to be true.
+
+`App\Support\CsvReport` is where every Invoice Ninja export is read, and `App\Support\BusinessName::matches()` is the one answer to whether two spellings are the same client — both importers use them, so they cannot drift on what counts as a match and open a second record for a client already on the books.
+
+`App\Actions\Clients\ImportClients` fills `billing_email`, `address` and the company and VAT numbers from the Clients report, and **only where the field is blank**: the export is months old by the time it is used and must not put a stale address back over one the studio corrected. It deliberately opens no businesses of its own — the invoice import is the one place a client arrives from a file — and reports the names it could not match instead. Requiring `Client Name` alone is far too weak a check, since the invoice and payment reports both carry it, so it also insists on a contact email or street column.
+
+Whatever gets uploaded, it must not reach a row access and die on an undefined array key — the studio has a folder full of CSVs and `report.csv` is one keystroke from `report (1).csv`. So `read()` strips the byte order mark Excel leaves on the first column name and sniffs the separator (a re-saved export can come back semicolon or tab separated by locale), `requireInvoiceColumns()` checks the header up front and names both what is missing and what was actually found, and everything outside `ImportInvoices::Required` is read through `value()` so a narrower report still imports what it has. A file with `Payment Date` in the invoices slot is told it belongs in the other box, and vice versa. Dates go through `date()`, which reports the row number rather than throwing a parser error, and a row with no invoice number is skipped rather than guessed at.
+
+`App\Exceptions\ImportException` carries the `field()` it belongs against, so the screen can
+put "the report type has to be Payment, not Invoice" under the payments dropzone instead of
+failing with no clue which of the two files was wrong.
+
+Re-running the import is safe: an invoice whose number is already there is left alone, and payment dates are backfilled on every run, so the payments export can arrive later than the invoices did. `--dry-run` runs the whole thing in a rolled-back transaction and prints per-currency totals to reconcile against.
+
 ## Money is per client, and never converted
 Each client (Team) has a `currency` (App\Enums\Currency: GBP, EUR, USD, CAD; GBP is `Currency::Base`). Everything quoted or invoiced to that client is in it.
 
@@ -128,3 +211,14 @@ The wording is overridden with `VerifyEmail::toMailUsing()` in `FortifyServicePr
 Studio-opened accounts never get a confirmation email: `pages::auth.set-password` stamps `email_verified_at` when they choose a password, because the studio typed the address and the person proved they read it. The backfill migration honours that by skipping anyone with `must_set_password`.
 
 **Nothing this app emails leaves the server without a queue worker.** Every notification is `ShouldQueue` and `QUEUE_CONNECTION=database`, so with no worker the jobs simply pile up in the `jobs` table with no error anywhere — that includes the confirmation link, ticket alerts, enquiry alerts, invoice chases and site-down warnings. The scheduler being on is not enough: `sites:check` and `invoices:chase` only queue the mail. Forge needs the worker and a real `MAIL_MAILER` as well as the scheduler.
+
+## Inviting a client is an invitation, not an opened account
+`App\Actions\Clients\InviteClient` is the one place the studio asks a client into the portal, for businesses that already exist — the ones imported from Invoice Ninja arrive with history and no people. `CreateClient` is the other case: a client being taken on, where the studio opens the account outright. Nothing is created by an invitation until the client accepts, so an unanswered one leaves no dormant account.
+
+Invitations carry `ClientAccess::Full`, because that is the only level that sees invoices and seeing their invoices is the point. They carry `TeamRole::Member` because `CreateNewUser::joinInvitedTeam` hardcodes Member and ignores `$invitation->role` — promising Owner here would be a lie the acceptance path does not keep. An invited client therefore cannot invite their own colleagues; the studio does it for them from the same panel. They last `InviteClient::VALID_FOR_DAYS` (14), longer than a colleague invite's 3, because a client was not expecting the email.
+
+Two traps fixed while building this, both of which had been live:
+- `pages::teams.pending-invitations-modal` created the membership with no `access`, so it fell to the column default of tickets-only and an invited client saw no invoices at all.
+- `CreateNewUser::pendingInvitation()` matched on the code alone, so a forwarded invite could be redeemed under any address. It now checks the email, which the modal path always had.
+
+The panel lives on `pages::admin.settings` and must stay **outside** `<form wire:submit="save">`, with `type="button"` on its controls. Inside the form every invite button also submitted the settings and its toast masked the real one.
