@@ -14,7 +14,7 @@ use RuntimeException;
  */
 class ImportException extends RuntimeException
 {
-    public function __construct(string $message, private string $field = 'invoices')
+    public function __construct(string $message, private string $field = 'file')
     {
         parent::__construct($message);
     }
@@ -30,7 +30,7 @@ class ImportException extends RuntimeException
     /**
      * The file could not be read at all.
      */
-    public static function unreadable(string $path, string $field = 'invoices'): self
+    public static function unreadable(string $path, string $field = 'file'): self
     {
         return new self("Cannot read [{$path}].", $field);
     }
@@ -38,44 +38,57 @@ class ImportException extends RuntimeException
     /**
      * The file has no rows in it at all.
      */
-    public static function empty(string $field = 'invoices'): self
+    public static function empty(string $field = 'file'): self
     {
         return new self('That file is empty. Export the report from Invoice Ninja again.', $field);
     }
 
     /**
-     * The file parsed, but it is not the report we were asked for.
+     * The file parsed, but it is not the shape we were asked for.
      *
      * Names what is missing and what was actually there, because "undefined
-     * array key" tells whoever uploaded it nothing about which of the dozen
-     * Invoice Ninja reports they picked.
+     * array key" tells whoever uploaded it nothing about which of the files on
+     * their desk they picked.
      *
      * @param  list<string>  $missing
      * @param  list<string>  $columns
      */
-    public static function wrongReport(string $report, array $missing, array $columns, string $field = 'invoices'): self
+    public static function wrongReport(string $report, array $missing, array $columns, string $field = 'file'): self
     {
-        $looksLikePayments = $report !== 'Payment' && in_array('Payment Date', $columns, true);
-
         return new self(
-            "That does not look like the {$report} report. It is missing "
-            .self::list($missing).'. '
-            .($looksLikePayments
-                ? 'It looks like the Payment report — that one goes in the payments box below.'
-                : "In Invoice Ninja the report type has to be \"{$report}\".")
-            .' Columns found: '.implode(', ', $columns).'.',
+            "That does not look like the {$report} file. It is missing "
+            .self::list($missing).'. Columns found: '.implode(', ', $columns).'.',
             $field,
         );
     }
 
     /**
+     * A row says it is something the importer does not know how to read.
+     */
+    public static function badRowType(int $line, string $value, string $field = 'file'): self
+    {
+        return new self(
+            "Row {$line} has a row_type of \"{$value}\". It has to be \"invoice\" or \"schedule\".",
+            $field,
+        );
+    }
+
+    /**
+     * A row is missing something it cannot be read without.
+     */
+    public static function missingValue(int $line, string $column, string $field = 'file'): self
+    {
+        return new self("Row {$line} has no {$column}, which every row needs.", $field);
+    }
+
+    /**
      * A row carries something where a date should be.
      */
-    public static function badDate(int $line, string $column, string $value, string $field = 'invoices'): self
+    public static function badDate(int $line, string $column, string $value, string $field = 'file'): self
     {
         return new self(
             "Row {$line} has \"{$value}\" in the {$column} column, which is not a date. "
-            .'Fix that row in the export and upload it again.',
+            .'Fix that row and upload it again.',
             $field,
         );
     }
@@ -92,22 +105,5 @@ class ImportException extends RuntimeException
         return count($quoted) === 1
             ? $quoted[0]
             : implode(', ', array_slice($quoted, 0, -1)).' and '.end($quoted);
-    }
-
-    /**
-     * The payments file has no payment dates in it, which almost always means
-     * the Invoice report was exported instead of the Payment one.
-     *
-     * @param  list<string>  $columns
-     */
-    public static function noPaymentDates(array $columns): self
-    {
-        return new self(
-            'That file has no payment dates in it. In Invoice Ninja the report type has to be '
-            .'"Payment", not "Invoice" — the invoice report filtered to Paid carries the same '
-            .'columns and no payment date at all ("Paid to Date" is an amount, not a date). '
-            .'Columns found: '.implode(', ', $columns).'.',
-            'payments',
-        );
     }
 }

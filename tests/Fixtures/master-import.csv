@@ -1,0 +1,14 @@
+row_type,client,client_email,client_address,client_currency,client_company_number,client_vat_number,client_terms_days,number,reference,type,status,issued_on,due_on,paid_on,amount,discount,paid_to_date,vat_rate,po_number,note,day_of_month,starts_on,ends_on
+invoice,Kintail Joinery & Sons,accounts@kintail.test,"2 Mill Wynd
+Banchory
+AB31 5QA",GBP,SC111111,,,IN-0048,0048,invoice,paid,2025-03-25,2025-03-28,2025-04-10,540.10,,540.10,0,6.130B,,,,
+invoice,Tayside Opportunities,hello@tayside.test,,GBP,,,,IN-0112,0112,invoice,paid,2026-09-01,2026-10-01,2026-09-04,6.00,19.00,6.00,0,,,,,
+invoice,Corrie Studio,,,GBP,,,,IN-0113,0113,invoice,partial,2026-09-02,2026-09-30,,650.00,,325.00,0,,,,,
+invoice,Corrie Studio,,,GBP,,,,IN-0094,0094,invoice,paid,2026-01-17,,2026-01-20,20.00,,20.00,0,,"Hosting.
+
+https://example.test/folder",,,
+invoice,Nordwind GmbH & Co KG,,,EUR,,DE123456789,,IN-0000276,0000276,invoice,paid,2022-12-26,,2023-01-09,"5,100.00",,"5,100.00",0,,,,,
+invoice,Lochside Design,,,GBP,,,,IN-0053,0053,invoice,sent,2025-04-02,,,247.50,,,0,,,,,
+invoice,Deveron Creative Partners,,,GBP,,,,REC-0001,AGY9900112233445566,record,paid,2026-09-18,2026-09-18,2026-09-18,525.00,,525.00,0,,3 days at £175 — week ending 05.09.2026,,,
+schedule,Tayside Opportunities,,,GBP,,,,,,invoice,,,,,6.00,19.00,,,,Website hosting,1,2026-10-01,
+schedule,Deveron Creative Partners,,,GBP,,,,,,record,,,,,525.00,,,,,"Day rate work, billed by the agency",18,2026-09-01,

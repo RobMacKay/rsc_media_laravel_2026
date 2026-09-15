@@ -73,40 +73,25 @@ A `record_only` schedule raises a paid record through `RaiseInvoice::record()` i
 
 There is no admin screen for these yet; they are created directly.
 
-## Importing history is the one exception to RaiseInvoice
-`App\Actions\Billing\ImportInvoices` writes invoices without going through `RaiseInvoice`, and that is deliberate. `RaiseInvoice` exists to make *new* invoices consistent: it stamps the next number, today's date and the studio's current VAT rate. An import has to keep the number, dates and status actually issued years ago, so routing it through `RaiseInvoice` would mean an override for every one of those and would hollow out the guarantee it is there to give. Do not "fix" this by merging them.
+## History comes in from one master file, and the app knows no other format
+`App\Actions\Import\ImportHistory` reads a single CSV in one documented shape and knows nothing about Invoice Ninja, or any other billing system. Reconciling whatever exports the studio can get hold of happens **once, outside the application**, and what reaches the importer is already clean. The first version did the opposite — it understood three Invoice Ninja report formats, guessed at column names and detected which report it had been handed — and all of that would have stayed in the codebase long after the migration nobody remembers.
 
-Two traps the import already handles, both of which silently corrupt the books if reintroduced:
+So: if the studio migrates from something else, the answer is a new master file, not a new importer.
 
-- **It must not use `CreateClient`.** That makes a User and emails a set-your-password link, and several of these contacts last heard from the studio in 2022. Clients come in as the business only; the live ones get invited by hand afterwards.
-- **The payments export is a different report.** Invoice Ninja's *Invoice* report filtered to Paid has identical columns and no payment date at all — "Paid to Date" is an amount, not a date. The column match is on the whole name against an allowlist for exactly this reason: a loose pattern matched `Invoice Date` and would have written issue dates in as the day the money arrived. There is no fallback; `paid_at` stays null when the date is not known. A part-paid invoice is never dated either, or the part payment reads as the whole thing being settled.
+The shape is one row per thing, each carrying its own client so the file reads in a spreadsheet with no lookup between sheets. `row_type` is `invoice` or `schedule`; `type` is `invoice` or `record`. Required on every row: `row_type`, `client`, `amount`, and on an invoice row a `number` and `issued_on`. Everything else is optional and read through a safe accessor, so a narrower file still imports what it has.
 
-Anything imported still outstanding arrives with `reminders_paused_at` set. The history is brought over for the record, not to restart collections — without this, inviting an imported client to the portal or setting a billing email on them fires a final notice for an invoice from 2025 that was probably settled outside this system. Unmute the individual ones the studio does still want chased.
+It is deliberately **not** `RaiseInvoice`, which exists to make *new* invoices consistent by stamping the next number, today's date and the studio's current VAT rate. History has to keep the number, dates and status actually issued years ago.
 
-The studio uploads the exports at `/admin/import` (`pages::admin.import`) rather than
-passing a path, so the real export never has to sit anywhere it might get committed. Upload,
-preview, confirm: the preview is the action's own `dryRun`, so it runs the whole import in a
-rolled-back transaction and prints the per-currency totals to reconcile before a row is
-written. The CLI command stays for use on a server, and both render from
-`ImportInvoices::summarise()` so the figure on screen and the figure in the terminal cannot
-drift.
+What it must never do, and there are tests holding each one:
 
-The uploads are deleted as soon as the run finishes, either way. Note that Livewire's
-`TemporaryUploadedFile::delete()` removes only the file and leaves a `<name>.json` sidecar
-holding the original filename and size, so the screen deletes both — it tells the studio the
-files have been deleted and that has to be true.
+- **Open a user or send an email.** Clients arrive as businesses with history and no people; the studio invites the live ones from the settings screen afterwards. That is what makes it safe to import a client last contacted in 2022.
+- **Overwrite a contact detail already on file.** The file is a snapshot and the studio may have corrected something by hand since.
+- **Move the studio's own numbering along.** Imported rows carry their own `IN-`/`REC-` numbers, and `nextNumber()` matches per prefix.
+- **Restart collections.** Anything still outstanding arrives with `reminders_paused_at` set; without it, giving an imported client a billing address fires a final notice for an invoice from 2025.
 
-`App\Support\CsvReport` is where every Invoice Ninja export is read, and `App\Support\BusinessName::matches()` is the one answer to whether two spellings are the same client — both importers use them, so they cannot drift on what counts as a match and open a second record for a client already on the books.
+Re-running is safe: an invoice whose number is already there is skipped, a schedule the client already has is skipped, and `--dry-run` runs the whole thing in a rolled-back transaction and prints per-currency totals to reconcile before a row is written.
 
-`App\Actions\Clients\ImportClients` fills `billing_email`, `address` and the company and VAT numbers from the Clients report, and **only where the field is blank**: the export is months old by the time it is used and must not put a stale address back over one the studio corrected. It deliberately opens no businesses of its own — the invoice import is the one place a client arrives from a file — and reports the names it could not match instead. Requiring `Client Name` alone is far too weak a check, since the invoice and payment reports both carry it, so it also insists on a contact email or street column.
-
-Whatever gets uploaded, it must not reach a row access and die on an undefined array key — the studio has a folder full of CSVs and `report.csv` is one keystroke from `report (1).csv`. So `read()` strips the byte order mark Excel leaves on the first column name and sniffs the separator (a re-saved export can come back semicolon or tab separated by locale), `requireInvoiceColumns()` checks the header up front and names both what is missing and what was actually found, and everything outside `ImportInvoices::Required` is read through `value()` so a narrower report still imports what it has. A file with `Payment Date` in the invoices slot is told it belongs in the other box, and vice versa. Dates go through `date()`, which reports the row number rather than throwing a parser error, and a row with no invoice number is skipped rather than guessed at.
-
-`App\Exceptions\ImportException` carries the `field()` it belongs against, so the screen can
-put "the report type has to be Payment, not Invoice" under the payments dropzone instead of
-failing with no clue which of the two files was wrong.
-
-Re-running the import is safe: an invoice whose number is already there is left alone, and payment dates are backfilled on every run, so the payments export can arrive later than the invoices did. `--dry-run` runs the whole thing in a rolled-back transaction and prints per-currency totals to reconcile against.
+`App\Support\CsvReport` is where any CSV the application is handed gets read — byte order mark stripped, separator sniffed, header checked before a single row is used — and `App\Support\BusinessName::matches()` is the one answer to whether two spellings are the same client. `App\Exceptions\ImportException` carries the `field()` it belongs against so the screen puts the message under the right control, and reports bad rows by line number rather than throwing a parser error at whoever uploaded the file.
 
 ## Money is per client, and never converted
 Each client (Team) has a `currency` (App\Enums\Currency: GBP, EUR, USD, CAD; GBP is `Currency::Base`). Everything quoted or invoiced to that client is in it.

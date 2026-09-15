@@ -1,8 +1,8 @@
 <?php
 
-use App\Actions\Billing\ImportInvoices;
-use App\Actions\Clients\ImportClients;
+use App\Actions\Import\ImportHistory;
 use App\Exceptions\ImportException;
+use App\Enums\Currency;
 use App\Models\Attachment;
 use App\Models\StudioSetting;
 use Flux\Flux;
@@ -20,21 +20,8 @@ new
 class extends Component {
     use WithFileUploads;
 
-    /** The Invoice Ninja invoice export. */
-    public ?TemporaryUploadedFile $invoices = null;
-
-    /**
-     * The separate payments export, which is the only place the dates live. Optional,
-     * because it is a different report and may well arrive later than the invoices did.
-     */
-    public ?TemporaryUploadedFile $payments = null;
-
-    /**
-     * The Clients export, which is the only one carrying contact details. Without
-     * it an imported client has no address to invite them at and no address on a
-     * re-issued invoice.
-     */
-    public ?TemporaryUploadedFile $clients = null;
+    /** The master CSV: clients, invoice history and standing arrangements in one file. */
+    public ?TemporaryUploadedFile $file = null;
 
     /**
      * What a dry run said would happen, held between the preview and the confirmation.
@@ -89,11 +76,9 @@ class extends Component {
      */
     public function discard(): void
     {
-        $this->forget($this->invoices);
-        $this->forget($this->payments);
-        $this->forget($this->clients);
+        $this->forget($this->file);
 
-        $this->reset(['invoices', 'payments', 'clients']);
+        $this->reset('file');
     }
 
     /**
@@ -148,42 +133,19 @@ class extends Component {
      */
     private function run(bool $dryRun): ?array
     {
-        $rules = Attachment::rules(['csv', 'txt'], $this->maxKb());
-
         $this->validate(
+            ['file' => Attachment::rules(['csv', 'txt'], $this->maxKb())],
             [
-                'invoices' => $rules,
-                'payments' => Attachment::rules(['csv', 'txt'], $this->maxKb(), required: false),
-                'clients' => Attachment::rules(['csv', 'txt'], $this->maxKb(), required: false),
-            ],
-            [
-                ...Attachment::messages('invoices', ['csv', 'txt'], $this->maxKb()),
-                ...Attachment::messages('payments', ['csv', 'txt'], $this->maxKb()),
-                ...Attachment::messages('clients', ['csv', 'txt'], $this->maxKb()),
-                'invoices.required' => __('Choose the invoice export to import.'),
+                ...Attachment::messages('file', ['csv', 'txt'], $this->maxKb()),
+                'file.required' => __('Choose the master CSV to import.'),
             ],
         );
 
-        $action = new ImportInvoices($this->settings());
-
-        $contacts = null;
+        $action = new ImportHistory($this->settings());
 
         try {
-            $result = $action->handle(
-                invoicesPath: $this->invoices->getRealPath(),
-                paymentsPath: $this->payments?->getRealPath(),
-                dryRun: $dryRun,
-            );
-
-            // Contact details go on after the businesses exist, so a client
-            // opened by this very run still gets its address. Inside the same
-            // try, or a wrong file here escapes as a 500.
-            if ($this->clients !== null) {
-                $contacts = (new ImportClients)->handle($this->clients->getRealPath(), $dryRun);
-            }
+            $result = $action->handle($this->file->getRealPath(), $dryRun);
         } catch (ImportException $e) {
-            // Put the complaint under the upload it is about, rather than failing with
-            // no clue which of the two files was the problem.
             $this->addError($e->field(), $e->getMessage());
 
             if (! $dryRun) {
@@ -193,29 +155,47 @@ class extends Component {
             return null;
         }
 
-        $summary = $action->summarise($result);
-
-        if ($contacts !== null) {
-            $summary['contacts'] = count($contacts['filled']);
-            $summary['unmatched'] = $contacts['unmatched'];
-        }
-
-        if ($summary['imported'] === 0 && $summary['skipped'] === 0) {
-            $this->addError('invoices', __('That export has no invoices in it.'));
+        if ($result['invoices']->isEmpty() && $result['skipped'] === [] && $result['schedules']->isEmpty()) {
+            $this->addError('file', __('That file has nothing in it to import.'));
 
             return null;
         }
 
-        return $summary;
+        return [
+            'clients' => $result['invoices']
+                ->groupBy(fn ($invoice) => $invoice->team->name)
+                ->map(fn ($rows, $name) => [
+                    'name' => $name,
+                    'invoices' => $rows->count(),
+                    'total' => $rows->first()->money((float) $rows->sum('amount'), 2),
+                ])
+                ->sortBy('name')
+                ->values()
+                ->all(),
+            'totals' => collect($result['totals'])
+                ->map(fn (float $total, string $code) => [
+                    'currency' => $code,
+                    'total' => Currency::from($code)->format($total, 2),
+                ])
+                ->sortKeys()
+                ->values()
+                ->all(),
+            'imported' => $result['invoices']->count(),
+            'schedules' => $result['schedules']->count(),
+            'opened' => $result['clients'],
+            'skipped' => count($result['skipped']),
+            'dated' => $result['dated'],
+            'undated' => count($result['undated']),
+        ];
     }
 }; ?>
 
 <div>
     <div class="mb-[clamp(20px,2.4vw,30px)]">
-        <x-rsc.kicker class="mb-2.5">invoice_ninja</x-rsc.kicker>
+        <x-rsc.kicker class="mb-2.5">master_file</x-rsc.kicker>
         <x-rsc.heading class="!text-[clamp(28px,4vw,46px)]">{{ __('Import') }}</x-rsc.heading>
         <p class="mt-3 mb-0 max-w-[62ch] text-sm text-muted">
-            {{ __('Bring invoice history across from Invoice Ninja. Nothing is written until you have seen what it would do, and the files are deleted the moment the import finishes.') }}
+            {{ __('Bring clients, invoice history and standing arrangements in from one file. Nothing is written until you have seen what it would do, and the file is deleted the moment the import finishes.') }}
         </p>
     </div>
 
@@ -230,11 +210,12 @@ class extends Component {
                 @foreach ($finished['totals'] as $total)
                     <span>{{ $total['currency'] }} <span class="text-body">{{ $total['total'] }}</span></span>
                 @endforeach
-                <span>{{ __('payment dates filled in') }} <span class="text-body">{{ $finished['dated'] }}</span></span>
+                <span>{{ __('payment dates') }} <span class="text-body">{{ $finished['dated'] }}</span></span>
+                <span>{{ __('standing arrangements') }} <span class="text-body">{{ $finished['schedules'] }}</span></span>
             </div>
 
             <p class="mt-4 mb-0 text-sm text-muted">
-                {{ __('The uploaded files have been deleted.') }}
+                {{ __('The uploaded file has been deleted.') }}
             </p>
 
             <div class="mt-5 flex flex-wrap gap-3">
@@ -249,27 +230,15 @@ class extends Component {
             <x-rsc.kicker class="mb-4">files</x-rsc.kicker>
 
             <div class="flex flex-col gap-3.5">
-                <x-rsc.dropzone name="invoices" model="invoices"
-                                :title="__('Invoice export')"
-                                :hint="$invoices
-                                    ? $invoices->getClientOriginalName()
-                                    : __('The Invoice report from Invoice Ninja, as CSV. Up to :size.', ['size' => \Illuminate\Support\Number::fileSize($this->maxKb() * 1024)])" />
-
-                <x-rsc.dropzone name="clients" model="clients"
-                                :title="__('Clients export (optional)')"
-                                :hint="$clients
-                                    ? $clients->getClientOriginalName()
-                                    : __('The Clients report — contact addresses, which is what lets you invite a client into the portal afterwards.')" />
-
-                <x-rsc.dropzone name="payments" model="payments"
-                                :title="__('Payments export (optional)')"
-                                :hint="$payments
-                                    ? $payments->getClientOriginalName()
-                                    : __('The Payment report — a different report type, and the only one carrying the date each invoice was settled. Skip it and dates stay blank; add it any time and re-run.')" />
+                <x-rsc.dropzone name="file" model="file"
+                                :title="__('Master CSV')"
+                                :hint="$file
+                                    ? $file->getClientOriginalName()
+                                    : __('One row per invoice or standing arrangement, each carrying its client. Up to :size.', ['size' => \Illuminate\Support\Number::fileSize($this->maxKb() * 1024)])" />
             </div>
 
             <div class="mt-5 flex flex-wrap items-center gap-3">
-                <x-rsc.button wire:click="preview" wire:loading.attr="disabled" wire:target="preview,invoices,payments">
+                <x-rsc.button wire:click="preview" wire:loading.attr="disabled" wire:target="preview,file">
                     <span wire:loading.remove wire:target="preview">{{ __('Show me what it would do') }}</span>
                     <span wire:loading wire:target="preview">{{ __('Reading…') }}</span>
                 </x-rsc.button>
@@ -348,17 +317,12 @@ class extends Component {
                         </dd>
                     @endif
                 </div>
-                @isset($previewed['contacts'])
+                @if ($previewed['schedules'] > 0)
                     <div>
-                        <dt class="font-mono text-[11px] tracking-[0.08em] text-muted">{{ __('contact details') }}</dt>
-                        <dd class="mt-1 mb-0 text-sm">{{ $previewed['contacts'] }}</dd>
-                        @if (($previewed['unmatched'] ?? []) !== [])
-                            <dd class="mt-1 mb-0 text-xs text-muted">
-                                {{ __('not on the books: :names', ['names' => implode(', ', $previewed['unmatched'])]) }}
-                            </dd>
-                        @endif
+                        <dt class="font-mono text-[11px] tracking-[0.08em] text-muted">{{ __('standing arrangements') }}</dt>
+                        <dd class="mt-1 mb-0 text-sm">{{ $previewed['schedules'] }}</dd>
                     </div>
-                @endisset
+                @endif
             </dl>
 
             <div class="mt-6 flex flex-wrap items-center gap-3">

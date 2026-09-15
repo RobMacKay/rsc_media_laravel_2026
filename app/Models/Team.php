@@ -46,6 +46,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Proposal> $proposals
  * @property-read Collection<int, Ticket> $tickets
  * @property-read Collection<int, Invoice> $invoices
+ * @property-read Collection<int, RecurringInvoice> $recurringInvoices
  * @property-read Collection<int, Site> $sites
  * @property-read Collection<int, ProjectUpdate> $updates
  */
@@ -173,6 +174,16 @@ class Team extends Model
     public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class)->latest('issued_on');
+    }
+
+    /**
+     * Get this client's standing monthly arrangements.
+     *
+     * @return HasMany<RecurringInvoice, $this>
+     */
+    public function recurringInvoices(): HasMany
+    {
+        return $this->hasMany(RecurringInvoice::class);
     }
 
     /**
