@@ -10,6 +10,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::livewire('/', 'pages::home')->name('home');
 
+// Legacy WordPress URLs that no longer exist. Kept so inbound links and
+// search results land on the home page instead of a 404.
+Route::permanentRedirect('welcome-to-rsc-media', '/');
+
 Route::name('legal.')->group(function () {
     Route::livewire('privacy', 'pages::legal.privacy')->name('privacy');
     Route::livewire('cookies', 'pages::legal.cookies')->name('cookies');
