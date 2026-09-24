@@ -6,14 +6,13 @@ use App\Exceptions\ImportException;
 use Illuminate\Support\Str;
 
 /**
- * One of Invoice Ninja's CSV reports, read defensively.
+ * A CSV handed to the application, read defensively.
  *
- * The studio has a folder full of exports whose names differ by a keystroke,
- * and a spreadsheet that has been opened in Excel comes back with a byte order
- * mark and whatever separator the machine's locale prefers. So nothing here
- * trusts the shape of the file: the header is checked before a single row is
- * used, and a file that is not the report we were asked for says which report
- * it is missing columns for and what it actually found.
+ * A spreadsheet that has been opened in Excel comes back with a byte order mark
+ * and whatever separator the machine's locale prefers, and the file on somebody's
+ * desk is rarely the one they meant. So nothing here trusts its shape: the
+ * header is checked before a single row is used, and a file missing what it
+ * needs says so, naming what it wanted and what it actually found.
  */
 class CsvReport
 {
@@ -33,7 +32,7 @@ class CsvReport
      * The field is the upload it came from, so anything thrown lands under the
      * right control rather than as a failure with no clue which file was wrong.
      */
-    public static function read(string $path, string $field = 'invoices'): self
+    public static function read(string $path, string $field = 'file'): self
     {
         if (! is_readable($path)) {
             throw ImportException::unreadable($path, $field);
@@ -176,9 +175,8 @@ class CsvReport
     /**
      * Find the column with exactly one of the given names, case aside.
      *
-     * Matched whole rather than loosely: "Invoice Paid to Date" is an amount
-     * and "Invoice Date" is when the invoice was raised, and either one
-     * pattern-matched into a payment date would silently misdate the books.
+     * Matched whole rather than loosely, so a column whose name merely
+     * resembles the one wanted is never read in its place.
      *
      * @param  list<string>  $candidates
      */

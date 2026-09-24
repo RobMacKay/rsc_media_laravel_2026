@@ -1,7 +1,0 @@
-"Client Name","Client Contact First Name","Client Contact Last Name","Client Contact Email","Client Phone","Client Street","Client Address2","Client City","Client Postal Code","Client Country","Client Id Number","Client VAT Number","Client Balance"
-"Kintail Joinery & Sons",Elspeth,Ross,accounts@kintail.test,01330 000000,"2 Mill Wynd","Unit 4",Banchory,AB31 5QA,"United Kingdom",SC111111,,0.00
-"Tayside Opportunities",Sophie,Bain,hello@tayside.test,01382 000001,"14 Reform Street",,Dundee,DD1 1RG,"United Kingdom",,,6.00
-"Corrie Studio",Iain,McKay,iain@corrie.test,,,,Oban,PA34 4AA,"United Kingdom",,,325.00
-"Nordwind GmbH & Co KG",Lena,Vogt,buchhaltung@nordwind.test,,"Hafenstrasse 12",,Hamburg,20359,Germany,,DE123456789,0.00
-"Lochside Design",Ruaridh,Fraser,,,,,Inverness,IV1 1AA,"United Kingdom",,,247.50
-"A Client We Never Invoiced",Someone,Else,nobody@elsewhere.test,,,,Perth,PH1 5AA,"United Kingdom",,,0.00
