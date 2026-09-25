@@ -207,13 +207,16 @@ class Proposal extends Model
                 'project_id' => $project->id,
             ]);
 
-            (new RaiseInvoice($settings))->handle(
-                team: $this->team,
-                type: InvoiceType::Deposit,
-                note: $this->title.' — '.$this->deposit_percent.'% deposit',
-                amount: (int) round($this->deposit()),
-                project: $project,
-            );
+            // No deposit means nothing to invoice yet, rather than a zero bill.
+            if ($this->deposit() > 0) {
+                (new RaiseInvoice($settings))->handle(
+                    team: $this->team,
+                    type: InvoiceType::Deposit,
+                    note: $this->title.' — '.$this->deposit_percent.'% deposit',
+                    amount: (int) round($this->deposit()),
+                    project: $project,
+                );
+            }
 
             return $project;
         });

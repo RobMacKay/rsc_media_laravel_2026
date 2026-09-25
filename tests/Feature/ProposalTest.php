@@ -4,12 +4,15 @@ use App\Enums\ClientAccess;
 use App\Enums\InvoiceType;
 use App\Enums\ProjectPhase;
 use App\Enums\ProposalStatus;
+use App\Enums\TeamRole;
 use App\Models\Invoice;
 use App\Models\Project;
 use App\Models\Proposal;
 use App\Models\StudioSetting;
 use App\Models\Team;
 use App\Models\User;
+use App\Notifications\SetYourPassword;
+use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 
 test('a client can propose a project', function () {
@@ -344,4 +347,117 @@ test('a long brief survives sign-off', function () {
         ->assertHasNoErrors();
 
     expect($proposal->fresh()->project->summary)->toBe($brief);
+});
+
+test('the studio can start a proposal on a client\'s behalf', function () {
+    $team = Team::factory()->create(['name' => 'Braemar Joinery']);
+    memberOf($team, ClientAccess::Full, TeamRole::Owner)->update(['name' => 'Kirsty Munro']);
+    Proposal::factory()->create(['reference' => 'PRJ-040']);
+
+    $component = Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.proposals')
+        ->call('openForm')
+        ->set('teamId', $team->id)
+        ->set('title', 'New website')
+        ->set('brief', 'A five page site to replace the old one.')
+        ->call('create')
+        ->assertHasNoErrors();
+
+    $proposal = Proposal::where('reference', 'PRJ-041')->sole();
+
+    expect($proposal->team_id)->toBe($team->id)
+        ->and($proposal->title)->toBe('New website')
+        ->and($proposal->status)->toBe(ProposalStatus::Submitted)
+        ->and($proposal->contact)->toBe('Kirsty Munro')
+        ->and($proposal->requested_by)->toBeNull()
+        ->and($component->instance()->current->is($proposal))->toBeTrue();
+});
+
+test('a new client can be opened from the new proposal panel', function () {
+    Notification::fake();
+
+    $component = Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.proposals')
+        ->call('openForm')
+        ->call('toggleAddClient')
+        ->set('newBusiness', 'Petrie Plant Hire')
+        ->set('newContactName', 'Alan Petrie')
+        ->set('newContactEmail', 'alan@petrieplant.co.uk')
+        ->call('createClient')
+        ->assertHasNoErrors();
+
+    $team = Team::whereName('Petrie Plant Hire')->sole();
+    $user = User::whereEmail('alan@petrieplant.co.uk')->sole();
+
+    $component->assertSet('teamId', $team->id)->assertSet('addingClient', false);
+
+    Notification::assertSentTo($user, SetYourPassword::class);
+});
+
+test('a proposal cannot be started for a personal team', function () {
+    $personal = Team::factory()->personal()->create();
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.proposals')
+        ->set('teamId', $personal->id)
+        ->set('title', 'New website')
+        ->set('brief', 'A five page site.')
+        ->call('create')
+        ->assertHasErrors(['teamId']);
+
+    expect(Proposal::count())->toBe(0);
+});
+
+test('the studio can sign off a proposal agreed outside the portal', function () {
+    $team = Team::factory()->create();
+    Proposal::factory()->for($team)->create([
+        'reference' => 'PRJ-050',
+        'title' => 'New website',
+        'status' => ProposalStatus::Submitted,
+    ]);
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.proposals')
+        ->call('select', 'PRJ-050')
+        ->set('scope', "Five pages\nContact form")
+        ->set('price', 2500)
+        ->set('depositPercent', 50)
+        ->call('signOff')
+        ->assertHasNoErrors();
+
+    $proposal = Proposal::sole();
+    $project = Project::sole();
+    $invoice = Invoice::sole();
+
+    expect($proposal->status)->toBe(ProposalStatus::Approved)
+        ->and($proposal->sent_at)->not->toBeNull()
+        ->and($proposal->project_id)->toBe($project->id)
+        ->and($project->reference)->toBe('PRJ-050')
+        ->and($project->agreed_value)->toBe(2500)
+        ->and($invoice->type)->toBe(InvoiceType::Deposit)
+        ->and($invoice->amount)->toBe(1250.0);
+});
+
+test('signing off on the client\'s behalf still needs scope and a price', function () {
+    Proposal::factory()->create(['reference' => 'PRJ-051', 'status' => ProposalStatus::Submitted]);
+
+    Livewire::actingAs(User::factory()->admin()->create())
+        ->test('pages::admin.proposals')
+        ->call('select', 'PRJ-051')
+        ->set('scope', '')
+        ->set('price', 0)
+        ->call('signOff')
+        ->assertHasErrors(['scope', 'price']);
+
+    expect(Proposal::sole()->status)->toBe(ProposalStatus::Submitted)
+        ->and(Project::count())->toBe(0);
+});
+
+test('signing off with no deposit raises no invoice', function () {
+    $proposal = Proposal::factory()->sent()->create(['deposit_percent' => 0]);
+
+    $project = $proposal->approve(StudioSetting::current());
+
+    expect($project->exists)->toBeTrue()
+        ->and(Invoice::count())->toBe(0);
 });
