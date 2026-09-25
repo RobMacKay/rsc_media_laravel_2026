@@ -1,10 +1,15 @@
 <?php
 
+use App\Actions\Clients\CreateClient;
 use App\Enums\ProposalStatus;
 use App\Models\Proposal;
 use App\Models\StudioSetting;
+use App\Models\Team;
+use App\Models\User;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -32,6 +37,26 @@ class extends Component {
     public int $depositPercent = 40;
 
     public int $weeks = 4;
+
+    /** Whether the new proposal panel is open. */
+    public bool $formOpen = false;
+
+    /** Whether the panel is showing the new client form rather than the proposal. */
+    public bool $addingClient = false;
+
+    public string $newBusiness = '';
+
+    public string $newContactName = '';
+
+    public string $newContactEmail = '';
+
+    public string $newJobTitle = '';
+
+    public ?int $teamId = null;
+
+    public string $title = '';
+
+    public string $brief = '';
 
     /**
      * Load the first proposal's draft so the panel is never empty on desktop.
@@ -66,6 +91,17 @@ class extends Component {
         $proposals = $this->proposals;
 
         return $proposals->firstWhere('reference', $this->selectedReference) ?? $proposals->first();
+    }
+
+    /**
+     * Get the client businesses a proposal can be written for.
+     *
+     * @return Collection<int, Team>
+     */
+    #[Computed]
+    public function clients(): Collection
+    {
+        return Team::query()->where('is_personal', false)->orderBy('name')->get();
     }
 
     /**
@@ -176,6 +212,145 @@ class extends Component {
     }
 
     /**
+     * Mark the proposal as signed off on the client's behalf, for work agreed
+     * outside the portal — on a call, by email, over a coffee.
+     *
+     * It goes through the same approval the client's own button does, so the
+     * job opens and the deposit is raised exactly as if they had clicked it.
+     */
+    public function signOff(): void
+    {
+        $proposal = $this->current;
+
+        abort_unless($proposal, 404);
+
+        $this->validate([
+            'scope' => ['required', 'string'],
+            'price' => ['required', 'integer', 'min:1'],
+        ], attributes: ['scope' => __('scope'), 'price' => __('price')]);
+
+        $this->persist($proposal->status === ProposalStatus::Sent ? [] : [
+            'status' => ProposalStatus::Sent,
+            'sent_at' => now(),
+        ]);
+
+        $project = $proposal->fresh()->approve($this->settings);
+
+        $this->selectedReference = null;
+        $this->detailOpen = false;
+
+        unset($this->proposals, $this->current, $this->totals, $this->waitingLabel);
+
+        $this->fillDraftFrom($this->current);
+
+        Flux::toast(variant: 'success', text: __(':reference is signed off and on the jobs board.', [
+            'reference' => $project->reference,
+        ]));
+    }
+
+    /**
+     * Open the panel for a new proposal.
+     */
+    public function openForm(): void
+    {
+        $this->formOpen = true;
+        $this->addingClient = false;
+        $this->teamId ??= $this->clients->first()?->id;
+        $this->resetValidation();
+    }
+
+    /**
+     * Close the new proposal panel.
+     */
+    public function closeForm(): void
+    {
+        $this->formOpen = false;
+        $this->addingClient = false;
+    }
+
+    /**
+     * Swap the panel between writing a proposal and opening a client account.
+     */
+    public function toggleAddClient(): void
+    {
+        $this->addingClient = ! $this->addingClient;
+        $this->reset('newBusiness', 'newContactName', 'newContactEmail', 'newJobTitle');
+        $this->resetValidation();
+    }
+
+    /**
+     * Open a client account, and select it for the proposal being written.
+     */
+    public function createClient(): void
+    {
+        $validated = $this->validate([
+            'newBusiness' => ['required', 'string', 'max:255'],
+            'newContactName' => ['required', 'string', 'max:255'],
+            'newContactEmail' => ['required', 'email', 'max:255', Rule::unique(User::class, 'email')],
+            'newJobTitle' => ['nullable', 'string', 'max:255'],
+        ], [
+            'newContactEmail.unique' => __('That address already has an account. Pick them from the list instead.'),
+        ]);
+
+        $team = app(CreateClient::class)->handle(
+            business: $validated['newBusiness'],
+            contactName: $validated['newContactName'],
+            contactEmail: $validated['newContactEmail'],
+            jobTitle: $validated['newJobTitle'] ?: null,
+            createdBy: Auth::user(),
+        );
+
+        $this->teamId = $team->id;
+        $this->addingClient = false;
+        $this->reset('newBusiness', 'newContactName', 'newContactEmail', 'newJobTitle');
+
+        unset($this->clients);
+
+        Flux::toast(variant: 'success', text: __(':business is set up. :name has been emailed to set a password.', [
+            'business' => $team->name,
+            'name' => $validated['newContactName'],
+        ]));
+    }
+
+    /**
+     * Start a proposal on a client's behalf, as if they had asked for it in
+     * their portal, and open it for writing up.
+     */
+    public function create(): void
+    {
+        $validated = $this->validate([
+            'teamId' => ['required', Rule::exists(Team::class, 'id')->where('is_personal', false)],
+            'title' => ['required', 'string', 'max:255'],
+            'brief' => ['required', 'string', 'max:5000'],
+        ], attributes: ['teamId' => __('client')]);
+
+        $team = Team::findOrFail($validated['teamId']);
+
+        $proposal = $team->proposals()->create([
+            'reference' => Proposal::nextReference(),
+            'title' => $validated['title'],
+            'brief' => $validated['brief'],
+            'contact' => $team->owner()?->getAttribute('name'),
+            'status' => ProposalStatus::Submitted,
+        ]);
+
+        $this->reset('title', 'brief');
+        $this->formOpen = false;
+
+        // The panel's open state lives in Alpine, so tell it to close.
+        $this->dispatch('proposal-started');
+
+        unset($this->proposals);
+
+        $this->select($proposal->reference);
+
+        Flux::toast(variant: 'success', text: __(':reference started for :business. Write it up below.', [
+            'reference' => $proposal->reference,
+            'business' => $team->name,
+        ]));
+    }
+
+    /**
      * Write the draft back to the selected proposal.
      *
      * @param  array<string, mixed>  $extra
@@ -231,13 +406,18 @@ class extends Component {
 
 @php $money = fn (float $value) => ($this->current?->team ?? $this->team ?? null)?->money(round($value)) ?? \App\Enums\Currency::Base->format(round($value)); @endphp
 
-<div wire:poll.15s>
+<div wire:poll.15s x-data="{ formOpen: @js($formOpen) }" x-on:proposal-started.window="formOpen = false">
     <div class="mb-[clamp(20px,2.4vw,30px)] flex flex-wrap items-end justify-between gap-5">
         <div>
             <x-rsc.kicker class="mb-2.5">from_clients</x-rsc.kicker>
             <x-rsc.heading class="!text-[clamp(28px,4vw,46px)]">{{ __('Proposals') }}</x-rsc.heading>
         </div>
-        <div class="font-mono text-[11px] text-muted">{{ $this->waitingLabel }}</div>
+        <div class="flex flex-wrap items-center gap-4">
+            <div class="font-mono text-[11px] text-muted">{{ $this->waitingLabel }}</div>
+            <x-rsc.button x-on:click="formOpen = true" wire:click="openForm" class="px-[26px] py-3.5">
+                {{ __('New proposal') }}
+            </x-rsc.button>
+        </div>
     </div>
 
     <div class="grid items-start gap-[clamp(12px,1.4vw,18px)] lg:grid-cols-[minmax(280px,340px)_1fr]">
@@ -375,6 +555,14 @@ class extends Component {
                         </x-rsc.button>
                     </div>
 
+                    @if ($this->readyToSend)
+                        <button type="button" wire:click="signOff"
+                                wire:confirm="{{ __('Mark :reference as signed off? This opens the job and raises the :deposit deposit invoice, as if the client had approved it themselves.', ['reference' => $proposal->reference, 'deposit' => $money($this->totals['deposit'])]) }}"
+                                class="cursor-pointer self-start bg-transparent p-0 font-mono text-[11px] text-muted transition-colors hover:text-brand">
+                            {{ __('already agreed? mark as signed off') }}
+                        </button>
+                    @endif
+
                     <div class="text-xs text-muted text-pretty">
                         {{ $this->readyToSend
                             ? __('Goes to :contact as a link into their portal. :weeks weeks quoted.', [
@@ -387,4 +575,64 @@ class extends Component {
             </section>
         @endif
     </div>
+    {{-- Rendered unconditionally with the conditional inside, and driven from
+         Alpine state, per the notes on the slide-over component. --}}
+    <x-rsc.slide-over open="formOpen"
+                      close="formOpen = false; $wire.closeForm()"
+                      :heading="__('New proposal')">
+        <div class="sticky top-0 z-1 flex items-start gap-4 border-b border-line bg-panel px-[clamp(20px,3vw,30px)] py-5">
+            <div class="min-w-0 flex-1">
+                <x-rsc.kicker tone="muted" class="mb-1.5">{{ $addingClient ? 'new_client' : 'on_their_behalf' }}</x-rsc.kicker>
+                <div class="font-display text-[19px] font-bold tracking-[-0.02em]">
+                    {{ $addingClient ? __('Open a client account') : __('New proposal') }}
+                </div>
+            </div>
+            <button type="button" x-on:click="formOpen = false" wire:click="closeForm"
+                    class="cursor-pointer bg-transparent p-1 font-mono text-[11px] text-muted transition-colors hover:text-brand"
+                    aria-label="{{ __('Close') }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" class="size-5" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="flex flex-col gap-5 px-[clamp(20px,3vw,30px)] py-[clamp(20px,2.6vw,28px)]">
+            @if ($addingClient)
+                @include('pages.admin.partials.new-client-fields')
+
+                <div class="flex flex-wrap items-center gap-3.5 border-t border-line pt-5">
+                    <x-rsc.button wire:click="createClient" class="px-[26px] py-3.5">{{ __('Create and email them') }}</x-rsc.button>
+                    <x-rsc.button variant="outline" wire:click="toggleAddClient" class="!px-5 !py-3 !text-sm">{{ __('Back') }}</x-rsc.button>
+                </div>
+            @else
+                <form wire:submit="create" class="flex flex-col gap-5">
+                    <x-rsc.field label="client" name="teamId">
+                        <x-rsc.select wire:model="teamId" class="!py-3">
+                            @foreach ($this->clients as $client)
+                                <option value="{{ $client->id }}">{{ $client->name }}</option>
+                            @endforeach
+                        </x-rsc.select>
+                        <button type="button" wire:click="toggleAddClient"
+                                class="mt-2 cursor-pointer bg-transparent p-0 font-mono text-[11px] text-brand">
+                            {{ __('+ new client') }}
+                        </button>
+                    </x-rsc.field>
+
+                    <x-rsc.field label="title" name="title">
+                        <x-rsc.input wire:model="title" placeholder="{{ __('New website') }}" class="!py-3" />
+                    </x-rsc.field>
+
+                    <x-rsc.field label="what_they_asked_for" name="brief">
+                        <x-rsc.textarea wire:model="brief" rows="5" class="!py-3 !text-sm"
+                                        placeholder="{{ __('A five page site to replace the old one, with a contact form.') }}">{{ $brief }}</x-rsc.textarea>
+                    </x-rsc.field>
+
+                    <div class="flex flex-wrap items-center gap-4">
+                        <x-rsc.button type="submit" target="create" class="px-[30px] py-3.5">{{ __('Start the proposal') }}</x-rsc.button>
+                        <span class="text-[13px] text-muted text-pretty">{{ __('Nothing goes to the client yet. Write it up, then send it or mark it signed off.') }}</span>
+                    </div>
+                </form>
+            @endif
+        </div>
+    </x-rsc.slide-over>
 </div>
