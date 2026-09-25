@@ -319,7 +319,7 @@ class extends Component {
     public function create(): void
     {
         $validated = $this->validate([
-            'teamId' => ['required', Rule::exists(Team::class, 'id')->where('is_personal', false)],
+            'teamId' => ['required', Rule::exists(Team::class, 'id')->where(fn ($query) => $query->where('is_personal', false))],
             'title' => ['required', 'string', 'max:255'],
             'brief' => ['required', 'string', 'max:5000'],
         ], attributes: ['teamId' => __('client')]);
